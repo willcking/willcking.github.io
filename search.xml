@@ -54,61 +54,11 @@
     
     
     <entry>
-      <title>Uniswap V3</title>
-      <link href="/2023/03/18/Uniswap-V3/"/>
-      <url>/2023/03/18/Uniswap-V3/</url>
-      
-        <content type="html"><![CDATA[]]></content>
-      
-      
-      <categories>
-          
-          <category> 区块链安全 </category>
-          
-      </categories>
-      
-      
-        <tags>
-            
-            <tag> 应用 </tag>
-            
-        </tags>
-      
-    </entry>
-    
-    
-    
-    <entry>
       <title>Uniswap V2</title>
       <link href="/2023/03/18/Uniswap-V2/"/>
       <url>/2023/03/18/Uniswap-V2/</url>
       
         <content type="html"><![CDATA[]]></content>
-      
-      
-      <categories>
-          
-          <category> 区块链安全 </category>
-          
-      </categories>
-      
-      
-        <tags>
-            
-            <tag> 应用 </tag>
-            
-        </tags>
-      
-    </entry>
-    
-    
-    
-    <entry>
-      <title>Uniswap V1</title>
-      <link href="/2023/03/18/Uniswap-V1/"/>
-      <url>/2023/03/18/Uniswap-V1/</url>
-      
-        <content type="html"><![CDATA[<h1 id="Uniswap-V1"><a href="#Uniswap-V1" class="headerlink" title="Uniswap V1"></a>Uniswap V1</h1><h2 id="Uniswap-V1体系概览"><a href="#Uniswap-V1体系概览" class="headerlink" title="Uniswap V1体系概览"></a>Uniswap V1体系概览</h2><p>niswap是DeFi中最著名的协议之一，Uniswap本质是一个自动化做市商（AMM），它舍弃了传统订单薄的撮合方式，采用流动池加恒定乘积公式算法($x times y=k$)为不同加密资产提供即时报价和兑换服务。</p><p>Uniswap V1的体系，分为两个部分：</p><p>Exchange，用于进行ETH和ERC-20代币之间的兑换。<br>Factory，用于创建和记录所有的Exchange，也用于查询代币对应的Exchange。</p><h2 id="Factory的实现"><a href="#Factory的实现" class="headerlink" title="Factory的实现"></a>Factory的实现</h2><pre class=" language-1"><code class="language-1">contract Exchange(): #代币兑换合约接口    def setup(token_addr: address): modifying NewExchange: event({token: indexed(address), exchange: indexed(address)}) exchangeTemplate: public(address) #兑换合约模板地址tokenCount: public(uint256)#已部署的代币兑换合约数量token_to_exchange: address[address]#代币地址-兑换合约地址的映射exchange_to_token: address[address] #代币兑换合约-代币地址的映射id_to_token: address[uint256] #代币id到代币地址的映射 #初始化兑换合约地址模板，只能运行一次，当合约模板存在时无法再调用@publicdef initializeFactory(template: address):    assert self.exchangeTemplate == ZERO_ADDRESS    assert template != ZERO_ADDRESS    self.exchangeTemplate = template #创建代币兑换合约，传入代币地址@publicdef createExchange(token: address) -> address:    assert token != ZERO_ADDRESS#代币地址不能是0地址    assert self.exchangeTemplate != ZERO_ADDRESS #合约模板不能为空    assert self.token_to_exchange[token] == ZERO_ADDRESS #该代币需要未创建过兑换合约    exchange: address = create_with_code_of(self.exchangeTemplate) #创建对比兑换合约    Exchange(exchange).setup(token) #初始化代币兑换合约    self.token_to_exchange[token] = exchange #记录代币兑换合约地址    self.exchange_to_token[exchange] = token #记录代币地址    token_id: uint256 = self.tokenCount + 1 #已部署的兑换合约数量+1并作为代币id    self.tokenCount = token_id    self.id_to_token[token_id] = token    log.NewExchange(token, exchange)    return exchange #根据代币地址找到代币兑换合约地址@public@constantdef getExchange(token: address) -> address:    return self.token_to_exchange[token] #根据兑换合约地址找到代币地址@public@constantdef getToken(exchange: address) -> address:    return self.exchange_to_token[exchange] #根据代币id找到代币地址@public@constantdef getTokenWithId(token_id: uint256) -> address:    return self.id_to_token[token_id]</code></pre><h2 id="Exchange的实现"><a href="#Exchange的实现" class="headerlink" title="Exchange的实现"></a>Exchange的实现</h2><p>Uniswap的核心功能在Exchange中进行实现。Exchange的实现略有复杂，我只列了出有功能的接口，</p><pre class=" language-1"><code class="language-1">// 只保留了Exchange的核心功能接口interface UniswapExchangeInterface {    // 流动性    function addLiquidity(uint256 min_liquidity, uint256 max_tokens, uint256 deadline) external payable returns (uint256);    function removeLiquidity(uint256 amount, uint256 min_eth, uint256 min_tokens, uint256 deadline) external returns (uint256, uint256);    // 价格查询    function getEthToTokenInputPrice(uint256 eth_sold) external view returns (uint256 tokens_bought);    function getEthToTokenOutputPrice(uint256 tokens_bought) external view returns (uint256 eth_sold);    function getTokenToEthInputPrice(uint256 tokens_sold) external view returns (uint256 eth_bought);    function getTokenToEthOutputPrice(uint256 eth_bought) external view returns (uint256 tokens_sold);    // 提供ETH以兑换代币    function ethToTokenSwapInput(uint256 min_tokens, uint256 deadline) external payable returns (uint256  tokens_bought);    function ethToTokenTransferInput(uint256 min_tokens, uint256 deadline, address recipient) external payable returns (uint256  tokens_bought);    function ethToTokenSwapOutput(uint256 tokens_bought, uint256 deadline) external payable returns (uint256  eth_sold);    function ethToTokenTransferOutput(uint256 tokens_bought, uint256 deadline, address recipient) external payable returns (uint256  eth_sold);    // 提供代币以兑换ETH    function tokenToEthSwapInput(uint256 tokens_sold, uint256 min_eth, uint256 deadline) external returns (uint256  eth_bought);    function tokenToEthTransferInput(uint256 tokens_sold, uint256 min_eth, uint256 deadline, address recipient) external returns (uint256  eth_bought);    function tokenToEthSwapOutput(uint256 eth_bought, uint256 max_tokens, uint256 deadline) external returns (uint256  tokens_sold);    function tokenToEthTransferOutput(uint256 eth_bought, uint256 max_tokens, uint256 deadline, address recipient) external returns (uint256  tokens_sold);    // 代币之间的互换    function tokenToTokenSwapInput(uint256 tokens_sold, uint256 min_tokens_bought, uint256 min_eth_bought, uint256 deadline, address token_addr) external returns (uint256  tokens_bought);    function tokenToTokenTransferInput(uint256 tokens_sold, uint256 min_tokens_bought, uint256 min_eth_bought, uint256 deadline, address recipient, address token_addr) external returns (uint256  tokens_bought);    function tokenToTokenSwapOutput(uint256 tokens_bought, uint256 max_tokens_sold, uint256 max_eth_sold, uint256 deadline, address token_addr) external returns (uint256  tokens_sold);    function tokenToTokenTransferOutput(uint256 tokens_bought, uint256 max_tokens_sold, uint256 max_eth_sold, uint256 deadline, address recipient, address token_addr) external returns (uint256  tokens_sold);}</code></pre><h2 id="Uniswap-V1的问题："><a href="#Uniswap-V1的问题：" class="headerlink" title="Uniswap V1的问题："></a>Uniswap V1的问题：</h2><p>不能直接创建两种ERC20代币的流动性池，只能创建ETH和ERC20代币的流动性池。</p>]]></content>
       
       
       <categories>
@@ -154,19 +104,6 @@
     
     
     <entry>
-      <title>内联汇编-下</title>
-      <link href="/2023/03/09/%E5%86%85%E8%81%94%E6%B1%87%E7%BC%96-%E4%B8%8B/"/>
-      <url>/2023/03/09/%E5%86%85%E8%81%94%E6%B1%87%E7%BC%96-%E4%B8%8B/</url>
-      
-        <content type="html"><![CDATA[]]></content>
-      
-      
-      
-    </entry>
-    
-    
-    
-    <entry>
       <title>代理/实现合约</title>
       <link href="/2023/03/09/%E4%BB%A3%E7%90%86-%E5%AE%9E%E7%8E%B0%E5%90%88%E7%BA%A6/"/>
       <url>/2023/03/09/%E4%BB%A3%E7%90%86-%E5%AE%9E%E7%8E%B0%E5%90%88%E7%BA%A6/</url>
@@ -174,56 +111,6 @@
         <content type="html"><![CDATA[]]></content>
       
       
-      
-    </entry>
-    
-    
-    
-    <entry>
-      <title>内联汇编(中)</title>
-      <link href="/2023/03/06/%E5%86%85%E8%81%94%E6%B1%87%E7%BC%96-%E4%B8%AD/"/>
-      <url>/2023/03/06/%E5%86%85%E8%81%94%E6%B1%87%E7%BC%96-%E4%B8%AD/</url>
-      
-        <content type="html"><![CDATA[<h1 id="内联汇编-中"><a href="#内联汇编-中" class="headerlink" title="内联汇编(中)"></a>内联汇编(中)</h1><p>让我们以经典的 Box 合约作为我们的例子。</p><pre><code>pragma solidity ^0.8.7;contract Box {  uint256 private _value;  event NewValue(uint256 newValue);  function store(uint256 newValue) public {    _value = newValue;    emit NewValue(newValue);  }  function retrieve() public view returns (uint256) {    return _value;  }}</code></pre><p>Box是一个简单的合约，它有一个状态变量 _value，根据状态变量布局规则，它被存储在 Storage的槽0中。此外，它有两个函数来获取/设置这个值。这里并不复杂。</p><p>在下一部分中，我们将部分地用汇编（即使用内联汇编）来编写下面这个简单的Box 合约</p>]]></content>
-      
-      
-      <categories>
-          
-          <category> solidity </category>
-          
-      </categories>
-      
-      
-        <tags>
-            
-            <tag> solidity </tag>
-            
-        </tags>
-      
-    </entry>
-    
-    
-    
-    <entry>
-      <title>内联汇编(上)</title>
-      <link href="/2023/03/01/%E5%86%85%E8%81%94%E6%B1%87%E7%BC%96-%E4%B8%8A/"/>
-      <url>/2023/03/01/%E5%86%85%E8%81%94%E6%B1%87%E7%BC%96-%E4%B8%8A/</url>
-      
-        <content type="html"><![CDATA[<h1 id="内联汇编-上"><a href="#内联汇编-上" class="headerlink" title="内联汇编(上)"></a>内联汇编(上)</h1><p>Solidity 是迄今为止 Ethereum 区块链上最常用的智能合约语言。它是一种高级语言，抽象了各种底层的琐碎细节。但有时你可能想深入到EVM的细粒度控制，不管是为了节省gas，还是为了编写优化库等，幸运的是你可以在你的合约中使用汇编语言(或者整个合约代码都是汇编编写的)。</p><p>用的汇编语言被称为 Yul ,是你访问 EVM 细粒度控制的的入口。（需要注意的是，使用汇编绕过了Solidity 的许多重要检查，你应该只在需要的时候使用，并且了解你所编写的汇编做了什么。）</p><p>我们将从下面的经典 Box 合约开始，逐步将这个合约转换为纯汇编。</p><p>我首先将对 4 个数据位置进行介绍：存储、内存、调用栈和 calldata。</p><h2 id="存储"><a href="#存储" class="headerlink" title="存储"></a>存储</h2><p>存储是状态变量被存储和永久保存的地方。这种存储的结构可以看作是简单的键-值对。键的长度为32字节或256比特，而且最多有2**256个不同的键值对</p><pre class=" language-1"><code class="language-1">Slot# (key)      Value-----------------------0      ----->     1231      ----->     456</code></pre><p>这里的 key 也可以被认为是槽号–范围从0到$ 2^{256} - 1 $。因此，知道槽号，你就可以读取存储在该槽中的数据。</p><h2 id="内存"><a href="#内存" class="headerlink" title="内存"></a>内存</h2><p>内存是 Solidity 代码中函数执行过程中临时变量的存储地。内存通常被用来存储复杂的类型，如数组。</p><p>内存可以被可视化为一个字节数组，数据可以以32字节或1字节为单位写入，并以32字节为单位读取。</p><h2 id="调用栈"><a href="#调用栈" class="headerlink" title="调用栈"></a>调用栈</h2><p>像内存一样，调用栈也是一个用于存储一些数据的地方。在编写 solidity 的时候，你可以操作 Storage 和Memory，调用栈则被自动利用。它不能用普通的 solidity 代码来访问，而是通过汇编。调用栈是用来存储立即使用的值，不需要为以后使用而存储。</p><p>那么，它与内存有什么不同呢？Solidity代码实际上会被编译成了一个操作码列表。你可以把这些操作码看作是底层函数，它可以接受输入并给出输出。这些操作码接收参数的方式是从调用栈中弹出与它所接受的参数数量相同的值。而且，如果有输出，则会把返回的值推到调用栈。</p><p>例如，当你写一个状态变量时，SSTORE操作码被执行。现在，SSTORE需要两个输入，要写入的槽号和要写入的值。所以，SSTORE所做的是它从调用栈中弹出两个值，并将它们作为输入。PUSH1操作码可以用来先把这些输入推到堆栈。</p><h2 id="calldata"><a href="#calldata" class="headerlink" title="calldata"></a>calldata</h2><p>Calldata 类似于内存，但它是一个用于存储函数参数的特殊的数据位置，只对外部函数调用可用。根据文档：</p><p>Calldata是一个不可修改的、非持久的区域，用于存储函数参数，其行为主要类似于内存。</p><p>Calldata可能看起来像这样:</p><pre class=" language-1"><code class="language-1">0x6057361d000000000000000000000000000000000000000000000000000000000000000a</code></pre><p>这里的前4个字节（6057361d）是函数 selector（函数的标识符），其余是传递给函数的输入参数。</p><p>EVM决定执行哪个函数的方式是通过匹配合约中的函数 selector 。我们之后在编写纯汇编合约时将手动实现这一点。</p><p>所以，你可以认为一个外部函数调用只不过是一个长的十六进制数据 calldata 被发送到一个特定的合同地址</p>]]></content>
-      
-      
-      <categories>
-          
-          <category> solidity </category>
-          
-      </categories>
-      
-      
-        <tags>
-            
-            <tag> solidity </tag>
-            
-        </tags>
       
     </entry>
     

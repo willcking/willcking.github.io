@@ -333,21 +333,21 @@ C">
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-check fa-fw"></i>更新日期:&nbsp;&nbsp;
-                    2024-03-18
+                    2024-03-19
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-file-word fa-fw"></i>文章字数:&nbsp;&nbsp;
-                    1.6k
+                    2k
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-clock fa-fw"></i>阅读时长:&nbsp;&nbsp;
-                    8 分
+                    10 分
                 </div>
                 
 
@@ -633,7 +633,119 @@ C">
     }
 </code></pre>
 <p>同样通过borrowBalanceStoredInternal计算用户的借款总数accountBorrowsPrev(包括利息),再通过doTransferIn(payer, repayAmountFinal);还款并且得到实际还款，最后更新状态。</p>
-<h2 id="InterestRateModel-sol"><a href="#InterestRateModel-sol" class="headerlink" title="InterestRateModel.sol"></a>InterestRateModel.sol</h2><p>Compound有直线型和拐点型两种利率模型。<br>直线型：<br>在该模型下，资产的利率会随着资金使用率升高而线性增长（利率 = 基准年利率 + 资金使用率 * 增长率）<br>拐点型：<br>在该模型下，资产利率的增长会分为两段，前面一段增长率较低，后面一段增长率较高。目前Compound 使用这一种利率模型，以资金使用率 80% 为拐点。</p>
+<h2 id="计算利息"><a href="#计算利息" class="headerlink" title="计算利息"></a>计算利息</h2><pre><code>此函数用来更新这变量，用于后续计算的利率更新
+ function accrueInterest() virtual override public returns (uint) {
+        /* Remember the initial block number */
+        uint currentBlockNumber = getBlockNumber();
+        uint accrualBlockNumberPrior = accrualBlockNumber;
+
+        /* Short-circuit accumulating 0 interest */
+        if (accrualBlockNumberPrior == currentBlockNumber) {
+            return NO_ERROR;
+        }
+
+        /* Read the previous values out of storage */
+        uint cashPrior = getCashPrior();
+        uint borrowsPrior = totalBorrows;
+        uint reservesPrior = totalReserves;
+        uint borrowIndexPrior = borrowIndex;
+
+        /* Calculate the current borrow interest rate */
+        uint borrowRateMantissa = interestRateModel.getBorrowRate(cashPrior, borrowsPrior, reservesPrior);
+        require(borrowRateMantissa &lt;= borrowRateMaxMantissa, "borrow rate is absurdly high");
+
+        /* Calculate the number of blocks elapsed since the last accrual */
+        uint blockDelta = currentBlockNumber - accrualBlockNumberPrior;
+
+        /*
+         * Calculate the interest accumulated into borrows and reserves and the new index:
+         *  simpleInterestFactor = borrowRate * blockDelta
+         *  interestAccumulated = simpleInterestFactor * totalBorrows
+         *  totalBorrowsNew = interestAccumulated + totalBorrows
+         *  totalReservesNew = interestAccumulated * reserveFactor + totalReserves
+         *  borrowIndexNew = simpleInterestFactor * borrowIndex + borrowIndex
+         */
+
+        Exp memory simpleInterestFactor = mul_(Exp({mantissa: borrowRateMantissa}), blockDelta);
+        uint interestAccumulated = mul_ScalarTruncate(simpleInterestFactor, borrowsPrior);
+        uint totalBorrowsNew = interestAccumulated + borrowsPrior;
+        uint totalReservesNew = mul_ScalarTruncateAddUInt(Exp({mantissa: reserveFactorMantissa}), interestAccumulated, reservesPrior);
+        uint borrowIndexNew = mul_ScalarTruncateAddUInt(simpleInterestFactor, borrowIndexPrior, borrowIndexPrior);
+
+        /////////////////////////
+        // EFFECTS &amp; INTERACTIONS
+        // (No safe failures beyond this point)
+
+        /* We write the previously calculated values into storage */
+        accrualBlockNumber = currentBlockNumber;
+        borrowIndex = borrowIndexNew;
+        totalBorrows = totalBorrowsNew;
+        totalReserves = totalReservesNew;
+
+        /* We emit an AccrueInterest event */
+        emit AccrueInterest(cashPrior, interestAccumulated, borrowIndexNew, totalBorrowsNew);
+
+        return NO_ERROR;
+    }
+</code></pre>
+<p>主要的计算</p>
+<pre><code>        Exp memory simpleInterestFactor = mul_(Exp({mantissa: borrowRateMantissa}), blockDelta);
+        uint interestAccumulated = mul_ScalarTruncate(simpleInterestFactor, borrowsPrior);
+        uint totalBorrowsNew = interestAccumulated + borrowsPrior;
+        uint totalReservesNew = mul_ScalarTruncateAddUInt(Exp({mantissa: reserveFactorMantissa}), interestAccumulated, reservesPrior);
+        uint borrowIndexNew = mul_ScalarTruncateAddUInt(simpleInterestFactor, borrowIndexPrior, borrowIndexPrior);
+</code></pre>
+<p>功能如下</p>
+<pre><code>simpleInterestFactor = borrowRate * blockDelta // 计算区块数量时间的利息率
+interestAccumulated = simpleInterestFactor * totalBorrows // 计算要收的利息
+totalBorrowsNew = interestAccumulated + totalBorrows  // 总借款
+totalReservesNew = interestAccumulated * reserveFactor + totalReserves // 总储备
+borrowIndexNew = simpleInterestFactor * borrowIndex + borrowIndex // 累加借款指数
+</code></pre>
+<h2 id="InterestRateModel-sol"><a href="#InterestRateModel-sol" class="headerlink" title="InterestRateModel.sol"></a>InterestRateModel.sol</h2><p>Compound有直线型和拐点型两种利率模型。</p>
+<p>直线型：<br>在该模型下，资产的利率会随着资金使用率升高而线性增长（利率 = 基准年利率 + 资金使用率 * 增长率）</p>
+<p>拐点型：<br>在该模型下，资产利率的增长会分为两段，前面一段增长率较低，后面一段增长率较高。</p>
+<p>而为了控制利用率在安全范围内，Compound 大多数抵押品都使用拐点型利率模型。对应合约为 BaseJumpRateModelV2。</p>
+<p>先看合约里的状态变量</p>
+<pre class=" language-solidity"><code class="language-solidity">    uint256 private constant BASE = 1e18;
+    address public owner;
+    uint public constant blocksPerYear = 2102400;
+    uint public multiplierPerBlock;
+    uint public baseRatePerBlock;
+    uint public jumpMultiplierPerBlock;
+    uint public kink;
+</code></pre>
+<p>BASE: 小数点位数，用于计算。</p>
+<p>owner: 所有者地址，为Timelock合约，</p>
+<p>blocksPerYear: 一年大概的区块数(并不准确)，用于计算年利率。</p>
+<p>multiplierPerBlock: 初始斜率k值</p>
+<p>baseRatePerBlock: 利率初始值</p>
+<p>jumpMultiplierPerBlock: 拐点后的斜率k值</p>
+<p>kink: 拐点值。</p>
+<p>借款利率</p>
+<pre class=" language-solidity"><code class="language-solidity">    function getBorrowRateInternal(uint cash, uint borrows, uint reserves) internal view returns (uint) {
+        uint util = utilizationRate(cash, borrows, reserves);
+
+        if (util <= kink) {
+            return ((util * multiplierPerBlock) / BASE) + baseRatePerBlock;
+        } else {
+            uint normalRate = ((kink * multiplierPerBlock) / BASE) + baseRatePerBlock;
+            uint excessUtil = util - kink;
+            return ((excessUtil * jumpMultiplierPerBlock) / BASE) + normalRate;
+        }
+    }
+</code></pre>
+<p>先通过utilizationRate得到资金利用率，如果资金使用率没超过拐点，借款利率 y = x * k1 + b，如果超过拐点y = x * k2 + b + link*k1。</p>
+<p>注意，这里计算的是一个区块的利率。至于APR，根据官网的描述，一天中的区块利润是单利的，而一年中的365天是复利的。</p>
+<p>获取区块存款利率</p>
+<pre class=" language-solidity"><code class="language-solidity">    function getSupplyRate(uint cash, uint borrows, uint reserves, uint reserveFactorMantissa) virtual override public view returns (uint) {
+        uint oneMinusReserveFactor = BASE - reserveFactorMantissa;
+        uint borrowRate = getBorrowRateInternal(cash, borrows, reserves);
+        uint rateToPool = borrowRate * oneMinusReserveFactor / BASE;
+        return utilizationRate(cash, borrows, reserves) * rateToPool / BASE;
+    }
+</code></pre>
+<p>由上代码可知存款利率 = 资金使用率 * 借款利率 *（1 - 储备金率），简单来说就是借款利息的一部分要分到储备金里进行储备。</p>
 
                 
             </div>
@@ -1069,7 +1181,7 @@ C">
             <br>
             
                 &nbsp;<i class="fas fa-chart-area"></i>&nbsp;站点总字数:&nbsp;<span
-                        class="white-color">21.1k</span>
+                        class="white-color">21.5k</span>
             
             
             

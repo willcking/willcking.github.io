@@ -5,11 +5,11 @@
 <head>
     <meta charset="utf-8">
     <meta name="keywords" content="Aave V2分析(二), Blog">
-    <meta name="description" content="Aave V2分析(二)书接上文，本篇我们从代码分析Withdrawal的逻辑
-Withdraw  function withdraw(
+    <meta name="description" content="Aave V2分析(二)书接上文，本篇我们从代码分析了Deposit,Withdraw的逻辑
+Borrow  function borrow(
     address asset,
     uint256 amount,
-    address ">
+    uint2">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="renderer" content="webkit|ie-stand|ie-comp">
@@ -334,14 +334,14 @@ Withdraw  function withdraw(
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-check fa-fw"></i>更新日期:&nbsp;&nbsp;
-                    2024-03-21
+                    2024-03-22
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-file-word fa-fw"></i>文章字数:&nbsp;&nbsp;
-                    457
+                    599
                 </div>
                 
 
@@ -368,96 +368,239 @@ Withdraw  function withdraw(
 
         <div class="card-content article-card-content">
             <div id="articleContent">
-                <h1 id="Aave-V2分析-二"><a href="#Aave-V2分析-二" class="headerlink" title="Aave V2分析(二)"></a>Aave V2分析(二)</h1><p>书接上文，本篇我们从代码分析Withdrawal的逻辑</p>
-<h2 id="Withdraw"><a href="#Withdraw" class="headerlink" title="Withdraw"></a>Withdraw</h2><pre class=" language-solidity"><code class="language-solidity">  function withdraw(
+                <h1 id="Aave-V2分析-二"><a href="#Aave-V2分析-二" class="headerlink" title="Aave V2分析(二)"></a>Aave V2分析(二)</h1><p>书接上文，本篇我们从代码分析了Deposit,Withdraw的逻辑</p>
+<h2 id="Borrow"><a href="#Borrow" class="headerlink" title="Borrow"></a>Borrow</h2><pre class=" language-solidity"><code class="language-solidity">  function borrow(
     address asset,
     uint256 amount,
-    address to
-  ) external override whenNotPaused returns (uint256) {
+    uint256 interestRateMode,
+    uint16 referralCode,
+    address onBehalfOf
+  ) external override whenNotPaused {
     DataTypes.ReserveData storage reserve = _reserves[asset];
 
-    address aToken = reserve.aTokenAddress;
-
-    uint256 userBalance = IAToken(aToken).balanceOf(msg.sender);
-
-    uint256 amountToWithdraw = amount;
-
-    if (amount == type(uint256).max) {
-      amountToWithdraw = userBalance;
-    }
-
-    ValidationLogic.validateWithdraw(
-      asset,
-      amountToWithdraw,
-      userBalance,
-      _reserves,
-      _usersConfig[msg.sender],
-      _reservesList,
-      _reservesCount,
-      _addressesProvider.getPriceOracle()
+    _executeBorrow(
+      ExecuteBorrowParams(
+        asset,
+        msg.sender,
+        onBehalfOf,
+        amount,
+        interestRateMode,
+        reserve.aTokenAddress,
+        referralCode,
+        true
+      )
     );
-
-    reserve.updateState();
-
-    reserve.updateInterestRates(asset, aToken, 0, amountToWithdraw);
-
-    if (amountToWithdraw == userBalance) {
-      _usersConfig[msg.sender].setUsingAsCollateral(reserve.id, false);
-      emit ReserveUsedAsCollateralDisabled(asset, msg.sender);
-    }
-
-    IAToken(aToken).burn(msg.sender, to, amountToWithdraw, reserve.liquidityIndex);
-
-    emit Withdraw(asset, msg.sender, to, amountToWithdraw);
-
-    return amountToWithdraw;
   }
 </code></pre>
-<p>与Deposit类似，首先获取了存入的资产合约的储备池对象</p>
-<pre class=" language-solidity"><code class="language-solidity">DataTypes.ReserveData storage reserve = _reserves[asset];
+<p>不同于deposit与withdraw将逻辑全放在里面，borrow进行了包装，将逻辑放在_executeBorrow函数中。</p>
+<p>接下来,我们逐步分析_executeBorrow函数。</p>
+<p>在函数中首先获取基本的借贷信息，包括代币资产储备池，借贷人的配置信息。</p>
+<pre class=" language-solidity"><code class="language-solidity">    DataTypes.ReserveData storage reserve = _reserves[vars.asset];
+    DataTypes.UserConfigurationMap storage userConfig = _usersConfig[vars.onBehalfOf];
 </code></pre>
-<p>然后验证取款是否合法</p>
-<pre class=" language-solidity"><code class="language-solidity">    ValidationLogic.validateWithdraw(
-      asset,
-      amountToWithdraw,
-      userBalance,
+<p>然后把借贷的代币按照市场价格转换成ETH的数量</p>
+<pre class=" language-solidity"><code class="language-solidity">    address oracle = _addressesProvider.getPriceOracle();
+    uint256 amountInETH =
+      IPriceOracleGetter(oracle).getAssetPrice(vars.asset).mul(vars.amount).div(
+        10**reserve.configuration.getDecimals()
+      );
+</code></pre>
+<p>然后验证借贷是否合规</p>
+<pre class=" language-solidity"><code class="language-solidity">    ValidationLogic.validateBorrow(
+      vars.asset,
+      reserve,
+      vars.onBehalfOf,
+      vars.amount,
+      amountInETH,
+      vars.interestRateMode,
+      _maxStableRateBorrowSizePercent,
       _reserves,
-      _usersConfig[msg.sender],
+      userConfig,
       _reservesList,
       _reservesCount,
-      _addressesProvider.getPriceOracle()
+      oracle
     );
 </code></pre>
-<p>再更新复利序列索引和流动性利率。(由于再Deposit中已经分析了，此处就不赘述了)</p>
-<pre class=" language-solidity"><code class="language-solidity">reserve.updateState();
+<p>然后更新复利序列</p>
+<pre class=" language-solidity"><code class="language-solidity">    reserve.updateState();
 
-reserve.updateInterestRates(asset, aToken, 0, amountToWithdraw);
+    uint256 currentStableRate = 0;
+
+    bool isFirstBorrowing = false;
 </code></pre>
-<p>最后销毁aToken，返回资产代币给用户。</p>
-<pre class=" language-solidity"><code class="language-solidity">IAToken(aToken).burn(msg.sender, to, amountToWithdraw, reserve.liquidityIndex);
+<p>然后执行借款，并根据是固定利率借款还是浮动利率借款铸造债务代币debtToken</p>
+<pre class=" language-solidity"><code class="language-solidity">    if (DataTypes.InterestRateMode(vars.interestRateMode) == DataTypes.InterestRateMode.STABLE) {
+      currentStableRate = reserve.currentStableBorrowRate;
 
-function burn(
+      isFirstBorrowing = IStableDebtToken(reserve.stableDebtTokenAddress).mint(
+        vars.user,
+        vars.onBehalfOf,
+        vars.amount,
+        currentStableRate
+      );
+    } else {
+      isFirstBorrowing = IVariableDebtToken(reserve.variableDebtTokenAddress).mint(
+        vars.user,
+        vars.onBehalfOf,
+        vars.amount,
+        reserve.variableBorrowIndex
+      );
+    }
+</code></pre>
+<p>然后此时更新利率</p>
+<pre class=" language-solidity"><code class="language-solidity">    reserve.updateInterestRates(
+      vars.asset,
+      vars.aTokenAddress,
+      0,
+      vars.releaseUnderlying ? vars.amount : 0
+    );
+</code></pre>
+<p>最后转移借贷的资产给用户</p>
+<pre class=" language-solidity"><code class="language-solidity">    if (vars.releaseUnderlying) {
+      IAToken(vars.aTokenAddress).transferUnderlyingTo(vars.user, vars.amount);
+    }
+</code></pre>
+<h3 id="Debt-Token"><a href="#Debt-Token" class="headerlink" title="Debt Token"></a>Debt Token</h3><p>Debt Token分固定利率的debt token和浮动利率的debt token</p>
+<h4 id="固定利率debt-token"><a href="#固定利率debt-token" class="headerlink" title="固定利率debt token"></a>固定利率debt token</h4><p>首先要明白的固定利率并非不会发生变化，只是不会随着市场波动而已。</p>
+<p>其实固定利率每个block都会发生变化，因此计算用户利息时使用的是用户的加权平均利率。</p>
+<p>更新固定利率债务步骤如下：</p>
+<p>1 用户打算借入amount1 数目的代币</p>
+<p>2 AAVE获取当前账户中的debt token数目</p>
+<p>3 按照复利计算，最近一次贷款时间到现在累计的本息</p>
+<p>4 通过mint的方式，将(amount1+累计的本息)个debt token 转移到用户账户</p>
+<p>5 更新用户的最新贷款时间为当前block.timestamp</p>
+<pre class=" language-solidity"><code class="language-solidity">  function mint(
     address user,
-    address receiverOfUnderlying,
+    address onBehalfOf,
+    uint256 amount,
+    uint256 rate
+  ) external override onlyLendingPool returns (bool) {
+    MintLocalVars memory vars;
+
+    if (user != onBehalfOf) {
+      _decreaseBorrowAllowance(onBehalfOf, user, amount);
+    }
+
+    (, uint256 currentBalance, uint256 balanceIncrease) = _calculateBalanceIncrease(onBehalfOf);
+
+    vars.previousSupply = totalSupply();
+    vars.currentAvgStableRate = _avgStableRate;
+    vars.nextSupply = _totalSupply = vars.previousSupply.add(amount);
+
+    vars.amountInRay = amount.wadToRay();
+
+    vars.newStableRate = _usersStableRate[onBehalfOf]
+      .rayMul(currentBalance.wadToRay())
+      .add(vars.amountInRay.rayMul(rate))
+      .rayDiv(currentBalance.add(amount).wadToRay());
+
+    require(vars.newStableRate <= type(uint128).max, Errors.SDT_STABLE_DEBT_OVERFLOW);
+    _usersStableRate[onBehalfOf] = vars.newStableRate;
+
+    //solium-disable-next-line
+    _totalSupplyTimestamp = _timestamps[onBehalfOf] = uint40(block.timestamp);
+
+    // Calculates the updated average stable rate
+    vars.currentAvgStableRate = _avgStableRate = vars
+      .currentAvgStableRate
+      .rayMul(vars.previousSupply.wadToRay())
+      .add(rate.rayMul(vars.amountInRay))
+      .rayDiv(vars.nextSupply.wadToRay());
+
+    _mint(onBehalfOf, amount.add(balanceIncrease), vars.previousSupply);
+
+    emit Transfer(address(0), onBehalfOf, amount);
+
+    emit Mint(
+      user,
+      onBehalfOf,
+      amount,
+      currentBalance,
+      balanceIncrease,
+      vars.newStableRate,
+      vars.currentAvgStableRate,
+      vars.nextSupply
+    );
+
+    return currentBalance == 0;
+  }
+</code></pre>
+<p>依然是先定义了一个数据结构，保存mint所需的数据</p>
+<pre class=" language-solidity"><code class="language-solidity">  struct MintLocalVars {
+    uint256 previousSupply;
+    uint256 nextSupply;
+    uint256 amountInRay;
+    uint256 newStableRate;
+    uint256 currentAvgStableRate;
+  }
+</code></pre>
+<p>这个出现了两个利率，一个是newStableRate，另一个是currentAvgStableRate，会在后面解释。然后获得贷款人余额信息。</p>
+<pre class=" language-solidity"><code class="language-solidity"> (, uint256 currentBalance, uint256 balanceIncrease) = _calculateBalanceIncrease(onBehalfOf);
+</code></pre>
+<p>这个函数返回了上一次交互的余额，当前余额和累计利息。然后再获取debt token总个数和平均固定利率。</p>
+<pre><code>    vars.previousSupply = totalSupply();
+    vars.currentAvgStableRate = _avgStableRate;
+    vars.nextSupply = _totalSupply = vars.previousSupply.add(amount);
+    vars.amountInRay = amount.wadToRay();
+</code></pre>
+<p>然后计算用户的固定利率债务的加权成本</p>
+<pre class=" language-solidity"><code class="language-solidity">  vars.newStableRate = _usersStableRate[onBehalfOf]
+      .rayMul(currentBalance.wadToRay())
+      .add(vars.amountInRay.rayMul(rate))
+      .rayDiv(currentBalance.add(amount).wadToRay());
+</code></pre>
+<p>请注意，这里计算的是针对单个用户的固定利率债务利率。然后更新用户的平均固定利率，接下来，整个储备池的平均固定利率也需要被更新</p>
+<pre class=" language-solidity"><code class="language-solidity">    _usersStableRate[onBehalfOf] = vars.newStableRate;
+
+    //solium-disable-next-line
+    _totalSupplyTimestamp = _timestamps[onBehalfOf] = uint40(block.timestamp);
+
+    // Calculates the updated average stable rate
+    vars.currentAvgStableRate = _avgStableRate = vars
+      .currentAvgStableRate
+      .rayMul(vars.previousSupply.wadToRay())
+      .add(rate.rayMul(vars.amountInRay))
+      .rayDiv(vars.nextSupply.wadToRay()); 
+</code></pre>
+<p>最后铸造debt token，mint操作被包装到了_mint函数中。</p>
+<pre class=" language-solidity"><code class="language-solidity">  function _mint(
+    address account,
+    uint256 amount,
+    uint256 oldTotalSupply
+  ) internal {
+    uint256 oldAccountBalance = _balances[account];
+    _balances[account] = oldAccountBalance.add(amount);
+
+    if (address(_incentivesController) != address(0)) {
+      _incentivesController.handleAction(account, oldTotalSupply, oldAccountBalance);
+    }
+  }
+</code></pre>
+<p>就是做一个简单的加法而已。</p>
+<h4 id="浮动利率debt-token"><a href="#浮动利率debt-token" class="headerlink" title="浮动利率debt token"></a>浮动利率debt token</h4><p>大致与铸造固定利率Debt toekn的反法一致。铸造可变利率Debt token的不同之处，在于用户debt token需要根据动态的利率进行调整，计息。</p>
+<pre class=" language-solidity"><code class="language-solidity">  function mint(
+    address user,
+    address onBehalfOf,
     uint256 amount,
     uint256 index
-  ) external override onlyLendingPool {
+  ) external override onlyLendingPool returns (bool) {
+    if (user != onBehalfOf) {
+      _decreaseBorrowAllowance(onBehalfOf, user, amount);
+    }
+
+    uint256 previousBalance = super.balanceOf(onBehalfOf);
     uint256 amountScaled = amount.rayDiv(index);
-    require(amountScaled != 0, Errors.CT_INVALID_BURN_AMOUNT);
-    _burn(user, amountScaled);
+    require(amountScaled != 0, Errors.CT_INVALID_MINT_AMOUNT);
 
-    IERC20(_underlyingAsset).safeTransfer(receiverOfUnderlying, amount);
+    _mint(onBehalfOf, amountScaled);
 
-    emit Transfer(user, address(0), amount);
-    emit Burn(user, receiverOfUnderlying, amount, index);
-}
+    emit Transfer(address(0), onBehalfOf, amount);
+    emit Mint(user, onBehalfOf, amount, index);
+
+    return previousBalance == 0;
+  }
 </code></pre>
-<p>这里唯一要细说的地方是销毁的aToken数目是经过流动性复利因子贴现过的数目。</p>
-<p>同样举个例子：</p>
-<p>客户存入2020年底存入了100 USDC，此时AAVE刚刚开始计息，流动性利率假设一直为10%。</p>
-<p>那么到了2022年，客户的本金和是100<em>1.1</em>1.1=121 USDC = 100 * LiquidityIndex(2)。客户持有的aToken则一直是100</p>
-<p>这里问题来了，客户此时打算全部提取走121 USDC。那么如果销毁121个aToken，这明显是不合适的。aToken作为存款凭证，并不会随着利息的增加而增加，它始终代表的是最初的100个USDC。</p>
-<p>所以此时销毁的aToken数量是 121/LiquidityIndex(2)=100</p>
+<p>首先获取用户账户上的debt token数量，然后使用浮动利率复利因子贴现铸造的amount。至于为什么这样算，原理与deposit类似，就不赘述了。</p>
 
                 
             </div>
@@ -895,7 +1038,7 @@ function burn(
             <br>
             
                 &nbsp;<i class="fas fa-chart-area"></i>&nbsp;站点总字数:&nbsp;<span
-                        class="white-color">22.8k</span>
+                        class="white-color">22.9k</span>
             
             
             

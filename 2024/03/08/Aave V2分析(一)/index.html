@@ -334,7 +334,7 @@ LendingPool.solLendingPool合约是Aave">
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-check fa-fw"></i>更新日期:&nbsp;&nbsp;
-                    2024-03-21
+                    2024-03-22
                 </div>
                 
 
@@ -861,6 +861,95 @@ LendingPool.solLendingPool合约是Aave">
 <p>用户2在2021年底存入了100 USDC，那么2022年底用户2持有的本金和为110 USDC = 100 <em>(1+0.1)=100</em> Liquidity index(1)。</p>
 <p>那么如果AAVE直接分配给用户1和用户2各100个aUSDC，那么在2022年底，用户1的100个aUSDC可以获取121个USDC，用户2的100个USDC也可以获取121个USDC，这明显是不合理的。</p>
 <p>因此为了计算合理，用户2在2021年存入100个USDC时，应该给与 100/Liqudity(1) 个aUSDC。这样在2022年底计息时，用户2的本金和就是<br>100/Liquidity(1) * Liquidity(2)=110 USDC。</p>
+<h2 id="Withdraw"><a href="#Withdraw" class="headerlink" title="Withdraw"></a>Withdraw</h2><pre class=" language-solidity"><code class="language-solidity">  function withdraw(
+    address asset,
+    uint256 amount,
+    address to
+  ) external override whenNotPaused returns (uint256) {
+    DataTypes.ReserveData storage reserve = _reserves[asset];
+
+    address aToken = reserve.aTokenAddress;
+
+    uint256 userBalance = IAToken(aToken).balanceOf(msg.sender);
+
+    uint256 amountToWithdraw = amount;
+
+    if (amount == type(uint256).max) {
+      amountToWithdraw = userBalance;
+    }
+
+    ValidationLogic.validateWithdraw(
+      asset,
+      amountToWithdraw,
+      userBalance,
+      _reserves,
+      _usersConfig[msg.sender],
+      _reservesList,
+      _reservesCount,
+      _addressesProvider.getPriceOracle()
+    );
+
+    reserve.updateState();
+
+    reserve.updateInterestRates(asset, aToken, 0, amountToWithdraw);
+
+    if (amountToWithdraw == userBalance) {
+      _usersConfig[msg.sender].setUsingAsCollateral(reserve.id, false);
+      emit ReserveUsedAsCollateralDisabled(asset, msg.sender);
+    }
+
+    IAToken(aToken).burn(msg.sender, to, amountToWithdraw, reserve.liquidityIndex);
+
+    emit Withdraw(asset, msg.sender, to, amountToWithdraw);
+
+    return amountToWithdraw;
+  }
+</code></pre>
+<p>与Deposit类似，首先获取了存入的资产合约的储备池对象</p>
+<pre class=" language-solidity"><code class="language-solidity">DataTypes.ReserveData storage reserve = _reserves[asset];
+</code></pre>
+<p>然后验证取款是否合法</p>
+<pre class=" language-solidity"><code class="language-solidity">    ValidationLogic.validateWithdraw(
+      asset,
+      amountToWithdraw,
+      userBalance,
+      _reserves,
+      _usersConfig[msg.sender],
+      _reservesList,
+      _reservesCount,
+      _addressesProvider.getPriceOracle()
+    );
+</code></pre>
+<p>再更新复利序列索引和流动性利率。(由于再Deposit中已经分析了，此处就不赘述了)</p>
+<pre class=" language-solidity"><code class="language-solidity">reserve.updateState();
+
+reserve.updateInterestRates(asset, aToken, 0, amountToWithdraw);
+</code></pre>
+<p>最后销毁aToken，返回资产代币给用户。</p>
+<pre class=" language-solidity"><code class="language-solidity">IAToken(aToken).burn(msg.sender, to, amountToWithdraw, reserve.liquidityIndex);
+
+function burn(
+    address user,
+    address receiverOfUnderlying,
+    uint256 amount,
+    uint256 index
+  ) external override onlyLendingPool {
+    uint256 amountScaled = amount.rayDiv(index);
+    require(amountScaled != 0, Errors.CT_INVALID_BURN_AMOUNT);
+    _burn(user, amountScaled);
+
+    IERC20(_underlyingAsset).safeTransfer(receiverOfUnderlying, amount);
+
+    emit Transfer(user, address(0), amount);
+    emit Burn(user, receiverOfUnderlying, amount, index);
+}
+</code></pre>
+<p>这里唯一要细说的地方是销毁的aToken数目是经过流动性复利因子贴现过的数目。</p>
+<p>同样举个例子：</p>
+<p>客户存入2020年底存入了100 USDC，此时AAVE刚刚开始计息，流动性利率假设一直为10%。</p>
+<p>那么到了2022年，客户的本金和是100<em>1.1</em>1.1=121 USDC = 100 * LiquidityIndex(2)。客户持有的aToken则一直是100</p>
+<p>这里问题来了，客户此时打算全部提取走121 USDC。那么如果销毁121个aToken，这明显是不合适的。aToken作为存款凭证，并不会随着利息的增加而增加，它始终代表的是最初的100个USDC。</p>
+<p>所以此时销毁的aToken数量是 121/LiquidityIndex(2)=100</p>
 
                 
             </div>
@@ -1296,7 +1385,7 @@ LendingPool.solLendingPool合约是Aave">
             <br>
             
                 &nbsp;<i class="fas fa-chart-area"></i>&nbsp;站点总字数:&nbsp;<span
-                        class="white-color">22.8k</span>
+                        class="white-color">22.9k</span>
             
             
             

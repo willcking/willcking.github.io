@@ -334,7 +334,7 @@ Borrow  function borrow(
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-check fa-fw"></i>更新日期:&nbsp;&nbsp;
-                    2024-03-22
+                    2024-03-23
                 </div>
                 
 
@@ -601,6 +601,177 @@ Borrow  function borrow(
   }
 </code></pre>
 <p>首先获取用户账户上的debt token数量，然后使用浮动利率复利因子贴现铸造的amount。至于为什么这样算，原理与deposit类似，就不赘述了。</p>
+<h2 id="Repay"><a href="#Repay" class="headerlink" title="Repay"></a>Repay</h2><pre class=" language-solidity"><code class="language-solidity">  function repay(
+    address asset,
+    uint256 amount,
+    uint256 rateMode,
+    address onBehalfOf
+  ) external override whenNotPaused returns (uint256) {
+    DataTypes.ReserveData storage reserve = _reserves[asset];
+
+    (uint256 stableDebt, uint256 variableDebt) = Helpers.getUserCurrentDebt(onBehalfOf, reserve);
+
+    DataTypes.InterestRateMode interestRateMode = DataTypes.InterestRateMode(rateMode);
+
+    ValidationLogic.validateRepay(
+      reserve,
+      amount,
+      interestRateMode,
+      onBehalfOf,
+      stableDebt,
+      variableDebt
+    );
+
+    uint256 paybackAmount =
+      interestRateMode == DataTypes.InterestRateMode.STABLE ? stableDebt : variableDebt;
+
+    if (amount < paybackAmount) {
+      paybackAmount = amount;
+    }
+
+    reserve.updateState();
+
+    if (interestRateMode == DataTypes.InterestRateMode.STABLE) {
+      IStableDebtToken(reserve.stableDebtTokenAddress).burn(onBehalfOf, paybackAmount);
+    } else {
+      IVariableDebtToken(reserve.variableDebtTokenAddress).burn(
+        onBehalfOf,
+        paybackAmount,
+        reserve.variableBorrowIndex
+      );
+    }
+
+    address aToken = reserve.aTokenAddress;
+    reserve.updateInterestRates(asset, aToken, paybackAmount, 0);
+
+    if (stableDebt.add(variableDebt).sub(paybackAmount) == 0) {
+      _usersConfig[onBehalfOf].setBorrowing(reserve.id, false);
+    }
+
+    IERC20(asset).safeTransferFrom(msg.sender, aToken, paybackAmount);
+
+    IAToken(aToken).handleRepayment(msg.sender, paybackAmount);
+
+    emit Repay(asset, onBehalfOf, msg.sender, paybackAmount);
+
+    return paybackAmount;
+  }
+</code></pre>
+<p>首先获取债务信息和利率信息，然后验证操作是否合规。</p>
+<pre class=" language-solidity"><code class="language-solidity">    DataTypes.ReserveData storage reserve = _reserves[asset];
+
+    (uint256 stableDebt, uint256 variableDebt) = Helpers.getUserCurrentDebt(onBehalfOf, reserve);
+
+    DataTypes.InterestRateMode interestRateMode = DataTypes.InterestRateMode(rateMode);
+
+    ValidationLogic.validateRepay(
+      reserve,
+      amount,
+      interestRateMode,
+      onBehalfOf,
+      stableDebt,
+      variableDebt
+    );
+</code></pre>
+<p>然后根据债务总数，确定实际可还数量。</p>
+<pre class=" language-solidity"><code class="language-solidity">    uint256 paybackAmount =
+      interestRateMode == DataTypes.InterestRateMode.STABLE ? stableDebt : variableDebt;
+
+    if (amount < paybackAmount) {
+      paybackAmount = amount;
+    }
+</code></pre>
+<p>然后更新复利序列索引。</p>
+<pre class=" language-solidity"><code class="language-solidity">reserve.updateState();
+</code></pre>
+<p>再根据债务属性，调用不同的接口销毁债务代币。</p>
+<pre class=" language-solidity"><code class="language-solidity"> if (interestRateMode == DataTypes.InterestRateMode.STABLE) {
+      IStableDebtToken(reserve.stableDebtTokenAddress).burn(onBehalfOf, paybackAmount);
+    } else {
+      IVariableDebtToken(reserve.variableDebtTokenAddress).burn(
+        onBehalfOf,
+        paybackAmount,
+        reserve.variableBorrowIndex
+      );
+    }
+</code></pre>
+<p>更新利率，检查剩余债务。</p>
+<pre class=" language-solidity"><code class="language-solidity">    address aToken = reserve.aTokenAddress;
+    reserve.updateInterestRates(asset, aToken, paybackAmount, 0);
+</code></pre>
+<p>最后处理aToken。</p>
+<pre class=" language-solidity"><code class="language-solidity">    IERC20(asset).safeTransferFrom(msg.sender, aToken, paybackAmount);
+    IAToken(aToken).handleRepayment(msg.sender, paybackAmount);
+</code></pre>
+<h3 id="销毁浮动债务"><a href="#销毁浮动债务" class="headerlink" title="销毁浮动债务"></a>销毁浮动债务</h3><p>由于引入了variableBorrowIndex 更新复利，所以销毁变得极其简单，只要从总额中扣除贴现后的amount即可。</p>
+<pre class=" language-solidity"><code class="language-solidity">  function burn(
+    address user,
+    uint256 amount,
+    uint256 index
+  ) external override onlyLendingPool {
+    uint256 amountScaled = amount.rayDiv(index);
+    require(amountScaled != 0, Errors.CT_INVALID_BURN_AMOUNT);
+
+    _burn(user, amountScaled);
+
+    emit Transfer(user, address(0), amount);
+    emit Burn(user, amount, index);
+  }
+</code></pre>
+<h3 id="销毁固定债务"><a href="#销毁固定债务" class="headerlink" title="销毁固定债务"></a>销毁固定债务</h3><p>相较于浮动利率，销毁固定债务的流程就复杂的多。<br>首先获得包含了复利的debt token数currentBalance，以及上次更新到现在的利息增量balanceIncrease。</p>
+<pre class=" language-solidity"><code class="language-solidity">(, uint256 currentBalance, uint256 balanceIncrease) = _calculateBalanceIncrease(user);
+</code></pre>
+<p>然后定义一些需要的变量。</p>
+<pre class=" language-solidity"><code class="language-solidity">    uint256 previousSupply = totalSupply();
+    uint256 newAvgStableRate = 0;
+    uint256 nextSupply = 0;
+    uint256 userStableRate = _usersStableRate[user];
+</code></pre>
+<p>然后处理利率不一致导致的对账对不上的问题。</p>
+<p>这里处理两种情况，第一个由于复利计算方式的微小差异，客户销毁的debt token数目大于等于现有的reserve supply数目。此时就设置 _totalSupply=0。第二个是按照用户的利率计算的debt token 利息大于整个储备池的debt token平均利息，则设置_totalSupply =0。</p>
+<pre class=" language-solidity"><code class="language-solidity">    if (previousSupply <= amount) {
+      _avgStableRate = 0;
+      _totalSupply = 0;
+    } else {
+      nextSupply = _totalSupply = previousSupply.sub(amount);
+      uint256 firstTerm = _avgStableRate.rayMul(previousSupply.wadToRay());
+      uint256 secondTerm = userStableRate.rayMul(amount.wadToRay());
+      if (secondTerm >= firstTerm) {
+        newAvgStableRate = _avgStableRate = _totalSupply = 0;
+      } else {
+        newAvgStableRate = _avgStableRate = firstTerm.sub(secondTerm).rayDiv(nextSupply.wadToRay());
+      }
+    }
+</code></pre>
+<p>然后处理用户偿还的债务，清零并且校对用户的最新时间为当前block生成时间。</p>
+<pre class=" language-solidity"><code class="language-solidity">    if (amount == currentBalance) {
+      _usersStableRate[user] = 0;
+      _timestamps[user] = 0;
+    } else {
+      _timestamps[user] = uint40(block.timestamp);
+    }
+      _totalSupplyTimestamp = uint40(block.timestamp);
+</code></pre>
+<p>如果用户从上次交互到现在累计的债务复利已经超过了此次偿还的金额，那么优先抵扣这部分债务，再将剩余债务铸造token debt。否则直接从偿还金额中扣除债务复利后，再销毁剩余的代币。</p>
+<pre class=" language-solidity"><code class="language-solidity">    if (balanceIncrease > amount) {
+      uint256 amountToMint = balanceIncrease.sub(amount);
+      _mint(user, amountToMint, previousSupply);
+      emit Mint(
+        user,
+        user,
+        amountToMint,
+        currentBalance,
+        balanceIncrease,
+        userStableRate,
+        newAvgStableRate,
+        nextSupply
+      );
+    } else {
+      uint256 amountToBurn = amount.sub(balanceIncrease);
+      _burn(user, amountToBurn, previousSupply);
+      emit Burn(user, amountToBurn, currentBalance, balanceIncrease, newAvgStableRate, nextSupply);
+    }
+</code></pre>
 
                 
             </div>

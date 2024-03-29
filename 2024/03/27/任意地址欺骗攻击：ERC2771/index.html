@@ -4,8 +4,9 @@
 
 <head>
     <meta charset="utf-8">
-    <meta name="keywords" content="ERC721A解析, Blog">
-    <meta name="description" content="前言目前流通中的NFT 项目，大多数都是基于OpenZeppelin的ERC721 实现版本来进行。该协议中对于铸造NFT是调用_safeMint来实现，需要传入的参数分别为“接收者地址”和“token id”。当需要mint多个NFT，使">
+    <meta name="keywords" content="任意地址欺骗攻击：ERC2771, Blog">
+    <meta name="description" content="任意地址欺骗攻击：ERC2771前言最近OpenZeppelin发表了一篇文章，在文章中指出，在项目中同时MulticallERC-2771和ERC-2771时容易受到地址欺骗的攻击。同时以太坊主网上的Time代币正因该漏洞遭受到攻击。
+前">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="renderer" content="webkit|ie-stand|ie-comp">
@@ -17,7 +18,7 @@
     <!-- Global site tag (gtag.js) - Google Analytics -->
 
 
-    <title>ERC721A解析 | Blog</title>
+    <title>任意地址欺骗攻击：ERC2771 | Blog</title>
     <link rel="icon" type="image/png" href="/favicon.png">
     
     <style>
@@ -282,12 +283,12 @@
 
 
 
-<div class="bg-cover pd-header post-cover" style="background-image: url('/medias/featureimages/22.jpg')">
+<div class="bg-cover pd-header post-cover" style="background-image: url('/medias/featureimages/20.jpg')">
     <div class="container" style="right: 0px;left: 0px;">
         <div class="row">
             <div class="col s12 m12 l12">
                 <div class="brand">
-                    <h1 class="description center-align post-title">ERC721A解析</h1>
+                    <h1 class="description center-align post-title">任意地址欺骗攻击：ERC2771</h1>
                 </div>
             </div>
         </div>
@@ -323,28 +324,28 @@
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-minus fa-fw"></i>发布日期:&nbsp;&nbsp;
-                    2024-01-17
+                    2024-03-27
                 </div>
                 
 
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-check fa-fw"></i>更新日期:&nbsp;&nbsp;
-                    2024-01-19
+                    2024-03-27
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-file-word fa-fw"></i>文章字数:&nbsp;&nbsp;
-                    611
+                    264
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-clock fa-fw"></i>阅读时长:&nbsp;&nbsp;
-                    2 分
+                    1 分
                 </div>
                 
 
@@ -364,85 +365,10 @@
 
         <div class="card-content article-card-content">
             <div id="articleContent">
-                <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>目前流通中的NFT 项目，大多数都是基于OpenZeppelin的ERC721 实现版本来进行。该协议中对于铸造NFT是调用_safeMint来实现，需要传入的参数分别为“接收者地址”和“token id”。当需要mint多个NFT，使用for循环要mint，算法复杂度是O(N)，mint1个NFT就需要进行至少2次SSTORE，所以mint N个NFT则需要进行至少2N次SSTORE。明显，这个成本将非常高昂。为了减少gas花费，Azuki开发了ERC721A。</p>
-<h2 id="分析"><a href="#分析" class="headerlink" title="分析"></a>分析</h2><h3 id="铸造"><a href="#铸造" class="headerlink" title="铸造"></a>铸造</h3><p>从Openzeppelin的实现来看，其主要缺点在于没有提供批量Mint的API，使得用户批量Mint时，其算法复杂度达到O(N).故ERC721A提出了一种批量Mint的API，使得其算法复杂度降为O(1).</p>
-<pre><code>function _mint(address to, uint256 quantity) internal virtual {
-...//checks
-        uint256 tokenId = _currIndex;
-        _balances[to] += quantity;
-        _owners[tokenId] = to;
-···//emit Event
-        for (uint256 i = 0; i &lt; quantity; i++) {
-           emit Transfer(address(0),to,tokenId);
-           tokenId++;
-        }
-   //update index
-        _currIndex = tokenId;
-}
-</code></pre>
-<p>ERC721A的_mint，它会代入to与quantity两个参数，而它只会将第一个tokenID记录owner，后续的tokenID并不会直接记录owner，而是会将它的使用权给予前一个被抓到的owner，并且用_currentID去记录原本累积到的tokenID数字加上这次所mint的数量，让下一个minter从这_currentID之后开始mint。</p>
-<h3 id="转账"><a href="#转账" class="headerlink" title="转账"></a>转账</h3><pre><code> function transferFrom(
-        address from,
-        address to,
-        uint256 tokenId
-    ) public payable virtual override {
-        uint256 prevOwnershipPacked = _packedOwnershipOf(tokenId);
-
-        from = address(uint160(uint256(uint160(from)) &amp; _BITMASK_ADDRESS));
-
-        if (address(uint160(prevOwnershipPacked)) != from) _revert(TransferFromIncorrectOwner.selector);
-
-        (uint256 approvedAddressSlot, address approvedAddress) = _getApprovedSlotAndAddress(tokenId);
-
-        if (!_isSenderApprovedOrOwner(approvedAddress, from, _msgSenderERC721A()))
-            if (!isApprovedForAll(from, _msgSenderERC721A())) _revert(TransferCallerNotOwnerNorApproved.selector);
-
-        _beforeTokenTransfers(from, to, tokenId, 1);
-
-        assembly {
-            if approvedAddress {
-                sstore(approvedAddressSlot, 0)
-            }
-        }
-
-        unchecked {
-            --_packedAddressData[from]; 
-            ++_packedAddressData[to]; 
-          
-            _packedOwnerships[tokenId] = _packOwnershipData(
-                to,
-                _BITMASK_NEXT_INITIALIZED | _nextExtraData(from, to, prevOwnershipPacked)
-            );
-
-            if (prevOwnershipPacked &amp; _BITMASK_NEXT_INITIALIZED == 0) {
-                uint256 nextTokenId = tokenId + 1;
-                if (_packedOwnerships[nextTokenId] == 0) {
-                    if (nextTokenId != _currentIndex) {
-                        _packedOwnerships[nextTokenId] = prevOwnershipPacked;
-                    }
-                }
-            }
-        }
-
-        uint256 toMasked = uint256(uint160(to)) &amp; _BITMASK_ADDRESS;
-        assembly {
-            log4(
-                0, 
-                0, 
-                _TRANSFER_EVENT_SIGNATURE, 
-                from, 
-                toMasked, 
-                tokenId 
-            )
-        }
-        if (toMasked == 0) _revert(TransferToZeroAddress.selector);
-
-        _afterTokenTransfers(from, to, tokenId, 1);
-    }
-</code></pre>
-<p>观察mint得到的tokenId，可以发现其均为连续，如果用户alice在mint后在transfer给bob，此时alice的tokenId区域就不连续了，此时应该如何来更新？</p>
-<p>例如：<br>alice，其拥有2，3，4，5，6这5个NFT，当其把3转给bob时，系统的更新应该如下：首先把tokenId=3的NFT的owner更新bob，然后在tokenId=4的NFT的owner应该由原来的address(0)更新为alice。这里的transfer不是批量操作，而是单个NFT的操作。对于多个NFT的批量transfer，这种算法仍然需要O(N).</p>
-<h2 id="销毁"><a href="#销毁" class="headerlink" title="销毁"></a>销毁</h2><p>由于销毁事实上相当于将 NFT 转移给 0 地址，所以其大量逻辑与 transfer 类似。就不赘述了。</p>
+                <h1 id="任意地址欺骗攻击：ERC2771"><a href="#任意地址欺骗攻击：ERC2771" class="headerlink" title="任意地址欺骗攻击：ERC2771"></a>任意地址欺骗攻击：ERC2771</h1><h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>最近OpenZeppelin发表了一篇文章，在文章中指出，在项目中同时MulticallERC-2771和ERC-2771时容易受到地址欺骗的攻击。同时以太坊主网上的Time代币正因该漏洞遭受到攻击。</p>
+<h2 id="前置知识"><a href="#前置知识" class="headerlink" title="前置知识"></a>前置知识</h2><p>ERC-2771实现了元交易的标准，允许用户委托第三方Forwarder执行交易，能够降低gas成本。在使用ERC-2771的情况下，如果msg.sender为Forwarder地址，会将传入的calldata的最后20个字节来作为交易的直接调用者地址。</p>
+<p>Multicall主要作用是在单个函数调用中批量调用多个函数的方法，从而减少gas成本。</p>
+<h2 id="漏洞"><a href="#漏洞" class="headerlink" title="漏洞"></a>漏洞</h2><p>在Time代币的攻击事件中，攻击者通过Forwarder.execute函数调用代币合约的multicall函数，执行burn函数。这种方式成功通过ERC-2771的isTrustedForwarder判断，将函数的调用者解析为攻击者恶意构造的calldata的最后20个字节。导致他人的代币被恶意销毁。</p>
 
                 
             </div>
@@ -469,7 +395,7 @@
                     </i>
                 </span>
                 <span class="reprint-info">
-                    <a href="https://willcking.github.io/2024/01/17/ERC721A%E8%A7%A3%E6%9E%90/">https://willcking.github.io/2024/01/17/ERC721A%E8%A7%A3%E6%9E%90/</a>
+                    <a href="https://willcking.github.io/2024/03/27/%E4%BB%BB%E6%84%8F%E5%9C%B0%E5%9D%80%E6%AC%BA%E9%AA%97%E6%94%BB%E5%87%BB%EF%BC%9AERC2771/">https://willcking.github.io/2024/03/27/%E4%BB%BB%E6%84%8F%E5%9C%B0%E5%9D%80%E6%AC%BA%E9%AA%97%E6%94%BB%E5%87%BB%EF%BC%9AERC2771/</a>
                 </span>
             </div>
             <div class="reprint__notice">
@@ -587,13 +513,13 @@
             <div class="article-badge left-badge text-color">
                 <i class="fas fa-chevron-left"></i>&nbsp;上一篇</div>
             <div class="card">
-                <a href="/2024/03/08/compund%E5%88%86%E6%9E%90/">
+                <a href="/2024/03/28/Uniswap-V3%E5%88%86%E6%9E%90(%E4%BA%8C)/">
                     <div class="card-image">
                         
                         
-                        <img src="/medias/featureimages/2.jpg" class="responsive-img" alt="compund分析">
+                        <img src="/medias/featureimages/17.jpg" class="responsive-img" alt="Uniswap v3分析(二)">
                         
-                        <span class="card-title">compund分析</span>
+                        <span class="card-title">Uniswap v3分析(二)</span>
                     </div>
                 </a>
                 <div class="card-content article-content">
@@ -604,7 +530,7 @@
                     </div>
                     <div class="publish-info">
                         <span class="publish-date">
-                            <i class="far fa-clock fa-fw icon-date"></i>2024-03-08
+                            <i class="far fa-clock fa-fw icon-date"></i>2024-03-28
                         </span>
                         <span class="publish-author">
                             
@@ -624,13 +550,13 @@
                 下一篇&nbsp;<i class="fas fa-chevron-right"></i>
             </div>
             <div class="card">
-                <a href="/2023/11/03/20230711-RodeoFinance/">
+                <a href="/2024/03/27/Uniswap-V3%E5%88%86%E6%9E%90(%E4%B8%80)/">
                     <div class="card-image">
                         
                         
-                        <img src="/medias/featureimages/3.jpg" class="responsive-img" alt="20230711 RodeoFinance">
+                        <img src="/medias/featureimages/11.jpg" class="responsive-img" alt="Uniswap V3分析(一)">
                         
-                        <span class="card-title">20230711 RodeoFinance</span>
+                        <span class="card-title">Uniswap V3分析(一)</span>
                     </div>
                 </a>
                 <div class="card-content article-content">
@@ -641,7 +567,7 @@
                     </div>
                     <div class="publish-info">
                             <span class="publish-date">
-                                <i class="far fa-clock fa-fw icon-date"></i>2023-11-03
+                                <i class="far fa-clock fa-fw icon-date"></i>2024-03-27
                             </span>
                         <span class="publish-author">
                             

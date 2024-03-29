@@ -337,14 +337,14 @@ UniswapV3Facto">
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-check fa-fw"></i>更新日期:&nbsp;&nbsp;
-                    2024-03-27
+                    2024-03-28
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-file-word fa-fw"></i>文章字数:&nbsp;&nbsp;
-                    848
+                    987
                 </div>
                 
 
@@ -392,6 +392,8 @@ UniswapV3Facto">
 <p>这里的virtual变量只和L, a,b有关，和X_real，Y_real没有关系。X_real，Y_real为用户提供的Xtoken，Ytoken数量。注意，X_virtual和Y_virtual虚拟出的只是为了计算一致性，并不会参与真实交易，因此其数量是恒定不变的。当价格变动，移动到用户设定的价格区间之外时，流动池会移除这部分流动性。</p>
 <h3 id="V3的交易"><a href="#V3的交易" class="headerlink" title="V3的交易"></a>V3的交易</h3><p>因为每一个用户提供的流动性都可能设置不同的价格区间，这样一来一个交易对的池子中就包含了多个不同的流动性。因此从单个交易池的视角来看，Uniswap v3实际上扮演的角色是一个交易聚合器。当发生交易时，此交易会拆分成多个，通过池中多个不同的流动性来进行交易，最后将交易结果聚合，完成最终的交易过程。</p>
 <p>而交易的具体过程又类似于LOB，每对Tick都可以看做一个具有流动性L的池。这个池的功能就是流动性不变的情况下，完成x和y的兑换功能。所以tick i和tick i+1可以看做一组限价单。交易的过程不停进行x和y的买入卖出，直到这对tick的流动性L被耗尽。此时系统再转移到下一组tick 继续执行订单。</p>
+<h3 id="V3的手续费"><a href="#V3的手续费" class="headerlink" title="V3的手续费"></a>V3的手续费</h3><p>在v1和v2中，每个交易对对应一个独立的流动性池，对所有池收取0.30%的手续费。但对于部分池子可能太高了(稳定币池)，而对于另一部分池子又太低了(高波动性)。</p>
+<p>为了解决这个问题，v3为每个交易对引入了多种池，允许分别设置不同的交易手续费。默认允许创建三个手续费等级：0.05%，0.30%和1%。可以通过UNI治理添加更多手续费等级。</p>
 
                 
             </div>
@@ -532,18 +534,17 @@ UniswapV3Facto">
 <article id="prenext-posts" class="prev-next articles">
     <div class="row article-row">
         
-        <div class="article col s12 m6" data-aos="fade-up" data-aos="fade-up">
+        <div class="article col s12 m6" data-aos="fade-up">
             <div class="article-badge left-badge text-color">
-                <i class="far fa-dot-circle"></i>&nbsp;本篇
-            </div>
+                <i class="fas fa-chevron-left"></i>&nbsp;上一篇</div>
             <div class="card">
-                <a href="/2024/03/27/Uniswap-V3%E5%88%86%E6%9E%90(%E4%B8%80)/">
+                <a href="/2024/03/27/%E4%BB%BB%E6%84%8F%E5%9C%B0%E5%9D%80%E6%AC%BA%E9%AA%97%E6%94%BB%E5%87%BB%EF%BC%9AERC2771/">
                     <div class="card-image">
                         
                         
-                        <img src="/medias/featureimages/11.jpg" class="responsive-img" alt="Uniswap V3分析(一)">
+                        <img src="/medias/featureimages/20.jpg" class="responsive-img" alt="任意地址欺骗攻击：ERC2771">
                         
-                        <span class="card-title">Uniswap V3分析(一)</span>
+                        <span class="card-title">任意地址欺骗攻击：ERC2771</span>
                     </div>
                 </a>
                 <div class="card-content article-content">
@@ -553,9 +554,9 @@ UniswapV3Facto">
                         
                     </div>
                     <div class="publish-info">
-                            <span class="publish-date">
-                                <i class="far fa-clock fa-fw icon-date"></i>2024-03-27
-                            </span>
+                        <span class="publish-date">
+                            <i class="far fa-clock fa-fw icon-date"></i>2024-03-27
+                        </span>
                         <span class="publish-author">
                             
                             <i class="fas fa-user fa-fw"></i>
@@ -564,7 +565,6 @@ UniswapV3Facto">
                         </span>
                     </div>
                 </div>
-
                 
             </div>
         </div>
@@ -829,7 +829,7 @@ UniswapV3Facto">
             <br>
             
                 &nbsp;<i class="fas fa-chart-area"></i>&nbsp;站点总字数:&nbsp;<span
-                        class="white-color">26.7k</span>
+                        class="white-color">27.9k</span>
             
             
             

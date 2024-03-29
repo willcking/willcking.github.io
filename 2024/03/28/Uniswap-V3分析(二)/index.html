@@ -4,8 +4,12 @@
 
 <head>
     <meta charset="utf-8">
-    <meta name="keywords" content="ERC721A解析, Blog">
-    <meta name="description" content="前言目前流通中的NFT 项目，大多数都是基于OpenZeppelin的ERC721 实现版本来进行。该协议中对于铸造NFT是调用_safeMint来实现，需要传入的参数分别为“接收者地址”和“token id”。当需要mint多个NFT，使">
+    <meta name="keywords" content="Uniswap v3分析(二), Blog">
+    <meta name="description" content="Uniswap v3分析(二)本文将分析Uniswap v3的核心模块Uniswap-v3-core。
+UniswapV3Factory.sol工厂合约主要包含二个方法：
+createPool方法：用于创建交易池
+
+enableFeeAmo">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <meta name="renderer" content="webkit|ie-stand|ie-comp">
@@ -17,7 +21,7 @@
     <!-- Global site tag (gtag.js) - Google Analytics -->
 
 
-    <title>ERC721A解析 | Blog</title>
+    <title>Uniswap v3分析(二) | Blog</title>
     <link rel="icon" type="image/png" href="/favicon.png">
     
     <style>
@@ -282,12 +286,12 @@
 
 
 
-<div class="bg-cover pd-header post-cover" style="background-image: url('/medias/featureimages/22.jpg')">
+<div class="bg-cover pd-header post-cover" style="background-image: url('/medias/featureimages/17.jpg')">
     <div class="container" style="right: 0px;left: 0px;">
         <div class="row">
             <div class="col s12 m12 l12">
                 <div class="brand">
-                    <h1 class="description center-align post-title">ERC721A解析</h1>
+                    <h1 class="description center-align post-title">Uniswap v3分析(二)</h1>
                 </div>
             </div>
         </div>
@@ -323,28 +327,28 @@
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-minus fa-fw"></i>发布日期:&nbsp;&nbsp;
-                    2024-01-17
+                    2024-03-28
                 </div>
                 
 
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-check fa-fw"></i>更新日期:&nbsp;&nbsp;
-                    2024-01-19
+                    2024-03-29
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-file-word fa-fw"></i>文章字数:&nbsp;&nbsp;
-                    611
+                    768
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-clock fa-fw"></i>阅读时长:&nbsp;&nbsp;
-                    2 分
+                    3 分
                 </div>
                 
 
@@ -364,85 +368,452 @@
 
         <div class="card-content article-card-content">
             <div id="articleContent">
-                <h2 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h2><p>目前流通中的NFT 项目，大多数都是基于OpenZeppelin的ERC721 实现版本来进行。该协议中对于铸造NFT是调用_safeMint来实现，需要传入的参数分别为“接收者地址”和“token id”。当需要mint多个NFT，使用for循环要mint，算法复杂度是O(N)，mint1个NFT就需要进行至少2次SSTORE，所以mint N个NFT则需要进行至少2N次SSTORE。明显，这个成本将非常高昂。为了减少gas花费，Azuki开发了ERC721A。</p>
-<h2 id="分析"><a href="#分析" class="headerlink" title="分析"></a>分析</h2><h3 id="铸造"><a href="#铸造" class="headerlink" title="铸造"></a>铸造</h3><p>从Openzeppelin的实现来看，其主要缺点在于没有提供批量Mint的API，使得用户批量Mint时，其算法复杂度达到O(N).故ERC721A提出了一种批量Mint的API，使得其算法复杂度降为O(1).</p>
-<pre><code>function _mint(address to, uint256 quantity) internal virtual {
-...//checks
-        uint256 tokenId = _currIndex;
-        _balances[to] += quantity;
-        _owners[tokenId] = to;
-···//emit Event
-        for (uint256 i = 0; i &lt; quantity; i++) {
-           emit Transfer(address(0),to,tokenId);
-           tokenId++;
-        }
-   //update index
-        _currIndex = tokenId;
-}
+                <h1 id="Uniswap-v3分析-二"><a href="#Uniswap-v3分析-二" class="headerlink" title="Uniswap v3分析(二)"></a>Uniswap v3分析(二)</h1><p>本文将分析Uniswap v3的核心模块<a target="_blank" rel="noopener" href="https://github.com/Uniswap/v3-core">Uniswap-v3-core</a>。</p>
+<h2 id="UniswapV3Factory-sol"><a href="#UniswapV3Factory-sol" class="headerlink" title="UniswapV3Factory.sol"></a>UniswapV3Factory.sol</h2><p>工厂合约主要包含二个方法：</p>
+<pre><code>createPool方法：用于创建交易池
+
+enableFeeAmount方法：用于设置手续费等级
 </code></pre>
-<p>ERC721A的_mint，它会代入to与quantity两个参数，而它只会将第一个tokenID记录owner，后续的tokenID并不会直接记录owner，而是会将它的使用权给予前一个被抓到的owner，并且用_currentID去记录原本累积到的tokenID数字加上这次所mint的数量，让下一个minter从这_currentID之后开始mint。</p>
-<h3 id="转账"><a href="#转账" class="headerlink" title="转账"></a>转账</h3><pre><code> function transferFrom(
-        address from,
-        address to,
-        uint256 tokenId
-    ) public payable virtual override {
-        uint256 prevOwnershipPacked = _packedOwnershipOf(tokenId);
-
-        from = address(uint160(uint256(uint160(from)) &amp; _BITMASK_ADDRESS));
-
-        if (address(uint160(prevOwnershipPacked)) != from) _revert(TransferFromIncorrectOwner.selector);
-
-        (uint256 approvedAddressSlot, address approvedAddress) = _getApprovedSlotAndAddress(tokenId);
-
-        if (!_isSenderApprovedOrOwner(approvedAddress, from, _msgSenderERC721A()))
-            if (!isApprovedForAll(from, _msgSenderERC721A())) _revert(TransferCallerNotOwnerNorApproved.selector);
-
-        _beforeTokenTransfers(from, to, tokenId, 1);
-
-        assembly {
-            if approvedAddress {
-                sstore(approvedAddressSlot, 0)
-            }
-        }
-
-        unchecked {
-            --_packedAddressData[from]; 
-            ++_packedAddressData[to]; 
-          
-            _packedOwnerships[tokenId] = _packOwnershipData(
-                to,
-                _BITMASK_NEXT_INITIALIZED | _nextExtraData(from, to, prevOwnershipPacked)
-            );
-
-            if (prevOwnershipPacked &amp; _BITMASK_NEXT_INITIALIZED == 0) {
-                uint256 nextTokenId = tokenId + 1;
-                if (_packedOwnerships[nextTokenId] == 0) {
-                    if (nextTokenId != _currentIndex) {
-                        _packedOwnerships[nextTokenId] = prevOwnershipPacked;
-                    }
-                }
-            }
-        }
-
-        uint256 toMasked = uint256(uint160(to)) &amp; _BITMASK_ADDRESS;
-        assembly {
-            log4(
-                0, 
-                0, 
-                _TRANSFER_EVENT_SIGNATURE, 
-                from, 
-                toMasked, 
-                tokenId 
-            )
-        }
-        if (toMasked == 0) _revert(TransferToZeroAddress.selector);
-
-        _afterTokenTransfers(from, to, tokenId, 1);
+<h3 id="createPool"><a href="#createPool" class="headerlink" title="createPool"></a>createPool</h3><pre class=" language-solidity"><code class="language-solidity"> function createPool(
+        address tokenA,
+        address tokenB,
+        uint24 fee
+    ) external override noDelegateCall returns (address pool) {
+        require(tokenA != tokenB);
+        (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
+        require(token0 != address(0));
+        int24 tickSpacing = feeAmountTickSpacing[fee];
+        require(tickSpacing != 0);
+        require(getPool[token0][token1][fee] == address(0));
+        pool = deploy(address(this), token0, token1, fee, tickSpacing);
+        getPool[token0][token1][fee] = pool;
+        // populate mapping in the reverse direction, deliberate choice to avoid the cost of comparing addresses
+        getPool[token1][token0][fee] = pool;
+        emit PoolCreated(token0, token1, fee, tickSpacing, pool);
     }
 </code></pre>
-<p>观察mint得到的tokenId，可以发现其均为连续，如果用户alice在mint后在transfer给bob，此时alice的tokenId区域就不连续了，此时应该如何来更新？</p>
-<p>例如：<br>alice，其拥有2，3，4，5，6这5个NFT，当其把3转给bob时，系统的更新应该如下：首先把tokenId=3的NFT的owner更新bob，然后在tokenId=4的NFT的owner应该由原来的address(0)更新为alice。这里的transfer不是批量操作，而是单个NFT的操作。对于多个NFT的批量transfer，这种算法仍然需要O(N).</p>
-<h2 id="销毁"><a href="#销毁" class="headerlink" title="销毁"></a>销毁</h2><p>由于销毁事实上相当于将 NFT 转移给 0 地址，所以其大量逻辑与 transfer 类似。就不赘述了。</p>
+<p>由于V3支持不同手续费等级，所以不同于V2只使用TokenA，TokenB来唯一确定一个交易池，V3还需要用到fee。</p>
+<p>因此在创建池的过程中多了一个检查fee是否合规的操作。</p>
+<h3 id="enableFeeAmount"><a href="#enableFeeAmount" class="headerlink" title="enableFeeAmount"></a>enableFeeAmount</h3><p>Uniswap v3默认支持三种手续费等级：0.05%、0.30%和1.00%。若要新增，就要用到这个方法。</p>
+<pre class=" language-solidity"><code class="language-solidity"> function enableFeeAmount(uint24 fee, int24 tickSpacing) public override {
+        require(msg.sender == owner);
+        require(fee < 1000000);
+        require(tickSpacing > 0 && tickSpacing < 16384);
+        require(feeAmountTickSpacing[fee] == 0);
+
+        feeAmountTickSpacing[fee] = tickSpacing;
+        emit FeeAmountEnabled(fee, tickSpacing);
+    }
+</code></pre>
+<p>逻辑很简单，接收两个参数fee(手续费)，tickSpacing手续费等级。先判断调用者是否为合约的owner，再判断fee和tickSpacing是否合法，<br>再判断是否已经被添加，最后改变状态。</p>
+<h2 id="UniswapV3Pool-sol"><a href="#UniswapV3Pool-sol" class="headerlink" title="UniswapV3Pool.sol"></a>UniswapV3Pool.sol</h2><p>交易池合约主要包含以下方法：<br>    initialize：初始化交易<br>    mint：添加流动性<br>    burn：移除流动性<br>    swap：交换代币<br>    flash：闪电贷<br>    collect：取回代币<br>    setFeeProtocol：修改某个交易对的协议手续费比例<br>    collectProtocol：收集某个交易对的协议手续费</p>
+<h3 id="initialize"><a href="#initialize" class="headerlink" title="initialize"></a>initialize</h3><p>创建完交易对后，需要调用initialize方法初始化slot0，才能正常使用。</p>
+<pre class=" language-solidity"><code class="language-solidity">function initialize(uint160 sqrtPriceX96) external override {
+        require(slot0.sqrtPriceX96 == 0, 'AI');
+
+        int24 tick = TickMath.getTickAtSqrtRatio(sqrtPriceX96);
+
+        (uint16 cardinality, uint16 cardinalityNext) = observations.initialize(_blockTimestamp());
+
+        slot0 = Slot0({
+            sqrtPriceX96: sqrtPriceX96,
+            tick: tick,
+            observationIndex: 0,
+            observationCardinality: cardinality,
+            observationCardinalityNext: cardinalityNext,
+            feeProtocol: 0,
+            unlocked: true
+        });
+
+        emit Initialize(sqrtPriceX96, tick);
+    }
+</code></pre>
+<p>slot0结构如下：</p>
+<p>sqrtPriceX96：交易对当前的开根号价格</p>
+<p>tick：当前的tick</p>
+<p>observationIndex：最近更新的观测点数组序号</p>
+<p>observationCardinality：观测点数组容量(最大65536，最小1)</p>
+<p>observationCardinalityNext：下一个观测点数组容量。</p>
+<p>feeProtocol：协议手续费比例，可以分别为token0和token1设置交易手续费中分给协议的比例</p>
+<p>unlocked：当前交易对合约是否非锁定状态</p>
+<h3 id="mint"><a href="#mint" class="headerlink" title="mint"></a>mint</h3><p>用于添加流动性。</p>
+<pre class=" language-solidity"><code class="language-solidity">  function mint(
+        address recipient,
+        int24 tickLower,
+        int24 tickUpper,
+        uint128 amount,
+        bytes calldata data
+    ) external override lock returns (uint256 amount0, uint256 amount1) {
+        require(amount > 0);
+        (, int256 amount0Int, int256 amount1Int) =
+            _modifyPosition(
+                ModifyPositionParams({
+                    owner: recipient,
+                    tickLower: tickLower,
+                    tickUpper: tickUpper,
+                    liquidityDelta: int256(amount).toInt128()
+                })
+            );
+
+        amount0 = uint256(amount0Int);
+        amount1 = uint256(amount1Int);
+
+        uint256 balance0Before;
+        uint256 balance1Before;
+        if (amount0 > 0) balance0Before = balance0();
+        if (amount1 > 0) balance1Before = balance1();
+        IUniswapV3MintCallback(msg.sender).uniswapV3MintCallback(amount0, amount1, data);
+        if (amount0 > 0) require(balance0Before.add(amount0) <= balance0(), 'M0');
+        if (amount1 > 0) require(balance1Before.add(amount1) <= balance1(), 'M1');
+
+        emit Mint(msg.sender, recipient, tickLower, tickUpper, amount, amount0, amount1);
+    }
+</code></pre>
+<p>首先通过_modifyPosition计算添加amount0的流动性所需要的token0的数量amount0Int和token1的数量amount1Int。</p>
+<p>然后就是转账，改变状态没什么可说的。</p>
+<p>值得注意的是转账通过回调msg.sender进行，因此个人EOA账户无法调用mint。</p>
+<p>接下来分析_modifyPosition是如何计算的</p>
+<pre class=" language-solidity"><code class="language-solidity">    function _modifyPosition(ModifyPositionParams memory params)
+        private
+        noDelegateCall
+        returns (
+            Position.Info storage position,
+            int256 amount0,
+            int256 amount1
+        )
+    {
+        checkTicks(params.tickLower, params.tickUpper);
+        Slot0 memory _slot0 = slot0;
+        position = _updatePosition(
+            params.owner,
+            params.tickLower,
+            params.tickUpper,
+            params.liquidityDelta,
+            _slot0.tick
+        );
+        if (params.liquidityDelta != 0) {
+            if (_slot0.tick < params.tickLower) {
+                amount0 = SqrtPriceMath.getAmount0Delta(
+                    TickMath.getSqrtRatioAtTick(params.tickLower),
+                    TickMath.getSqrtRatioAtTick(params.tickUpper),
+                    params.liquidityDelta
+                );
+            } else if (_slot0.tick < params.tickUpper) {
+                uint128 liquidityBefore = liquidity; 
+
+                (slot0.observationIndex, slot0.observationCardinality) = observations.write(
+                    _slot0.observationIndex,
+                    _blockTimestamp(),
+                    _slot0.tick,
+                    liquidityBefore,
+                    _slot0.observationCardinality,
+                    _slot0.observationCardinalityNext
+                );
+
+                amount0 = SqrtPriceMath.getAmount0Delta(
+                    _slot0.sqrtPriceX96,
+                    TickMath.getSqrtRatioAtTick(params.tickUpper),
+                    params.liquidityDelta
+                );
+                amount1 = SqrtPriceMath.getAmount1Delta(
+                    TickMath.getSqrtRatioAtTick(params.tickLower),
+                    _slot0.sqrtPriceX96,
+                    params.liquidityDelta
+                );
+
+                liquidity = LiquidityMath.addDelta(liquidityBefore, params.liquidityDelta);
+            } else {
+                amount1 = SqrtPriceMath.getAmount1Delta(
+                    TickMath.getSqrtRatioAtTick(params.tickLower),
+                    TickMath.getSqrtRatioAtTick(params.tickUpper),
+                    params.liquidityDelta
+                );
+            }
+        }
+    }
+</code></pre>
+<p>首先检查流动性区间是否合规。</p>
+<p>然后通过_updatePosition函数更新头寸。(这个后面会说)</p>
+<p>最后通过getAmount0Delta和getAmount1Delta计算需要提供的token0的数量amount0和token1的数量amount1。</p>
+<p>具体计算逻辑如下：</p>
+<pre><code>  当你提供流动性的区间的最小值大于当前tick_ic时，也就是区间在c的上方时，用户只需要提供x代币即可(amount0)。
+</code></pre>
+<p>反之，提供y代币(amount1)。</p>
+<pre><code>  当tick_ic被包含在你提供流动性的区间时，也就是c在区间内部时，用户需要提供x代币和y代币。
+</code></pre>
+<p>值得注意的时当tick_ic被包含在你提供流动性的区间时，会记录一次观测点数据(也就是此时资产价格)，且会更新当前交易对的全局活跃流动性liquidity(后面会用)。</p>
+<p>接下来分析_updatePosition。</p>
+<pre class=" language-solidity"><code class="language-solidity">function _updatePosition(
+        address owner,
+        int24 tickLower,
+        int24 tickUpper,
+        int128 liquidityDelta,
+        int24 tick
+    ) private returns (Position.Info storage position) {
+        position = positions.get(owner, tickLower, tickUpper);
+
+        uint256 _feeGrowthGlobal0X128 = feeGrowthGlobal0X128;
+        uint256 _feeGrowthGlobal1X128 = feeGrowthGlobal1X128;
+
+        bool flippedLower;
+        bool flippedUpper;
+        if (liquidityDelta != 0) {
+            uint32 time = _blockTimestamp();
+            (int56 tickCumulative, uint160 secondsPerLiquidityCumulativeX128) =
+                observations.observeSingle(
+                    time,
+                    0,
+                    slot0.tick,
+                    slot0.observationIndex,
+                    liquidity,
+                    slot0.observationCardinality
+                );
+
+            flippedLower = ticks.update(
+                tickLower,
+                tick,
+                liquidityDelta,
+                _feeGrowthGlobal0X128,
+                _feeGrowthGlobal1X128,
+                secondsPerLiquidityCumulativeX128,
+                tickCumulative,
+                time,
+                false,
+                maxLiquidityPerTick
+            );
+            flippedUpper = ticks.update(
+                tickUpper,
+                tick,
+                liquidityDelta,
+                _feeGrowthGlobal0X128,
+                _feeGrowthGlobal1X128,
+                secondsPerLiquidityCumulativeX128,
+                tickCumulative,
+                time,
+                true,
+                maxLiquidityPerTick
+            );
+
+            if (flippedLower) {
+                tickBitmap.flipTick(tickLower, tickSpacing);
+            }
+            if (flippedUpper) {
+                tickBitmap.flipTick(tickUpper, tickSpacing);
+            }
+        }
+
+        (uint256 feeGrowthInside0X128, uint256 feeGrowthInside1X128) =
+            ticks.getFeeGrowthInside(tickLower, tickUpper, tick, _feeGrowthGlobal0X128, _feeGrowthGlobal1X128);
+
+        position.update(liquidityDelta, feeGrowthInside0X128, feeGrowthInside1X128);
+
+        if (liquidityDelta < 0) {
+            if (flippedLower) {
+                ticks.clear(tickLower);
+            }
+            if (flippedUpper) {
+                ticks.clear(tickUpper);
+            }
+        }
+    }
+</code></pre>
+<p>首先获取用户的流动性头寸，token0和token1的手续费(Pool的总手续费，所有头寸的总和)</p>
+<p>然后通过observeSingle更新Oracle数据，接着使用ticks.update分别更新价格区间低点(tickLower)和价格区间高点(tickUpper)的状态。</p>
+<p>然后计算该价格区间的累积每流动性手续费。</p>
+<p>然后更新头寸信息，包括头寸的应收手续费tokensOwed0和tokensOwed1，以及头寸流动性liquidity。</p>
+<p>如果是移除流动性，并且tick被翻转，则调用clear清空tick状态。</p>
+<h3 id="burn"><a href="#burn" class="headerlink" title="burn"></a>burn</h3><p>销毁流动性的逻辑与添加流动性几乎相同，唯一的区别是liquidityDelta是负的。就不再赘述了。</p>
+<h3 id="swap"><a href="#swap" class="headerlink" title="swap"></a>swap</h3><p>swap的逻辑十分复杂，让我们一步一步来分析。</p>
+<p>先来看几个参数</p>
+<pre class=" language-solidityfunction"><code class="language-solidityfunction">        address recipient,
+        bool zeroForOne,
+        int256 amountSpecified,
+        uint160 sqrtPriceLimitX96,
+        bytes calldata data
+    ) external override noDelegateCall returns (int256 amount0, int256 amount1) {
+</code></pre>
+<p>recipient：交易后的代币接收者</p>
+<p>zeroForOne：如果从token0交换token1则为true，从token1交换token0则为false</p>
+<p>amountSpecified: 指定的代币数量，如果为正，表示希望输入的代币数量；如果为负，则表示希望输出的代币数量</p>
+<p>sqrtPriceLimitX96：能够承受的价格上限（或下限），格式为Q64.96；如果从token0到token1，则表示swap过程中的价格下限；如果从token1到token0，则表示价格上限；如果价格超过该值，则swap失败</p>
+<p>data：回调参数</p>
+<p>然后通过<code>MLOAD</code>(节省gas)定义一些数据。</p>
+<p>当准备工作完成以后，才真正的开开始swap，实际的swap交易在一个循环中发生，让我们来仔细分析。</p>
+<pre class=" language-solidity"><code class="language-solidity">// 当剩余代币为0或价格到达用户的上限(下限)时结束循环
+while (state.amountSpecifiedRemaining != 0 && state.sqrtPriceX96 != sqrtPriceLimitX96) {
+    // 交易过程每一次循环的状态变量
+    StepComputations memory step;
+    // 交易的起始价格
+    step.sqrtPriceStartX96 = state.sqrtPriceX96;
+    // 通过位图找到下一个可以选的交易价格
+    (step.tickNext, step.initialized) = tickBitmap.nextInitializedTickWithinOneWord(
+        state.tick,
+        tickSpacing,
+        zeroForOne
+    );
+
+    // 确保不会超出最小/最大刻度
+    if (step.tickNext < TickMath.MIN_TICK) {
+        step.tickNext = TickMath.MIN_TICK;
+    } else if (step.tickNext > TickMath.MAX_TICK) {
+        step.tickNext = TickMath.MAX_TICK;
+    }
+
+    //根据tickNext计算下一个tick的价格
+    step.sqrtPriceNextX96 = TickMath.getSqrtRatioAtTick(step.tickNext);
+
+   // 计算交换后的价格, 消耗的输入代币数量, 得到的输出代币数量, 交易手续费
+    (state.sqrtPriceX96, step.amountIn, step.amountOut, step.feeAmount) = SwapMath.computeSwapStep(
+        state.sqrtPriceX96,
+        (zeroForOne ? step.sqrtPriceNextX96 < sqrtPriceLimitX96 : step.sqrtPriceNextX96 > sqrtPriceLimitX96)
+            ? sqrtPriceLimitX96
+            : step.sqrtPriceNextX96,
+        state.liquidity,
+        state.amountSpecifiedRemaining,
+        fee
+    );
+    // 更新tokenIn的余额，以及tokenOut数量
+    if (exactInput) {
+        state.amountSpecifiedRemaining -= (step.amountIn + step.feeAmount).toInt256();
+        state.amountCalculated = state.amountCalculated.sub(step.amountOut.toInt256());
+    } else {
+        state.amountSpecifiedRemaining += step.amountOut.toInt256();
+        state.amountCalculated = state.amountCalculated.add((step.amountIn + step.feeAmount).toInt256());
+    }
+
+    // 如果协议费用开启，则计算应支付给协议的费用
+    if (cache.feeProtocol > 0) {
+        uint256 delta = step.feeAmount / cache.feeProtocol;
+        step.feeAmount -= delta;
+        state.protocolFee += uint128(delta);
+    }
+
+    // 更新全局手续费用
+    if (state.liquidity > 0)
+        state.feeGrowthGlobalX128 += FullMath.mulDiv(step.feeAmount, FixedPoint128.Q128, state.liquidity);
+
+    // 如果此时的价格 = 一个tick的价格，就更新流动性 L 的值
+    if (state.sqrtPriceX96 == step.sqrtPriceNextX96) {
+        // 检查如果该tick已经初始化，即是否为另一个流动性的边界
+        if (step.initialized) {
+            if (!cache.computedLatestObservation) {
+                (cache.tickCumulative, cache.secondsPerLiquidityCumulativeX128) = observations.observeSingle(
+                    cache.blockTimestamp,
+                    0,
+                    slot0Start.tick,
+                    slot0Start.observationIndex,
+                    cache.liquidityStart,
+                    slot0Start.observationCardinality
+                );
+                cache.computedLatestObservation = true;
+            }
+            // 计算当价格穿过该 tick 时，处于激活的流动性需要变化的数量
+            int128 liquidityNet =
+                ticks.cross(
+                    step.tickNext,
+                    (zeroForOne ? state.feeGrowthGlobalX128 : feeGrowthGlobal0X128),
+                    (zeroForOne ? feeGrowthGlobal1X128 : state.feeGrowthGlobalX128),
+                    cache.secondsPerLiquidityCumulativeX128,
+                    cache.tickCumulative,
+                    cache.blockTimestamp
+                );
+            // 根据价格增加/减少，即向左或向右移动，增加/减少相应的流动性
+            if (zeroForOne) liquidityNet = -liquidityNet;
+            // 更新流动性
+            state.liquidity = LiquidityMath.addDelta(state.liquidity, liquidityNet);
+        }
+        // 移动当前tick到下一个tick
+        state.tick = zeroForOne ? step.tickNext - 1 : step.tickNext;
+    } else if (state.sqrtPriceX96 != step.sqrtPriceStartX96) {
+        // aoumtIn被耗尽，使用交换后的价格计算最新的tick值
+        state.tick = TickMath.getTickAtSqrtRatio(state.sqrtPriceX96);
+    }
+}
+</code></pre>
+<p>在完成交换后，然后更新全局状态</p>
+<pre class=" language-solidity"><code class="language-solidity">if (state.tick != slot0Start.tick) {
+    (uint16 observationIndex, uint16 observationCardinality) =
+        observations.write(
+            slot0Start.observationIndex,
+            cache.blockTimestamp,
+            slot0Start.tick,
+            cache.liquidityStart,
+            slot0Start.observationCardinality,
+            slot0Start.observationCardinalityNext
+        );
+    (slot0.sqrtPriceX96, slot0.tick, slot0.observationIndex, slot0.observationCardinality) = (
+        state.sqrtPriceX96,
+        state.tick,
+        observationIndex,
+        observationCardinality
+    );
+} else {
+    slot0.sqrtPriceX96 = state.sqrtPriceX96;
+}
+</code></pre>
+<p>如果此时的tick与开始时的tick不同就记录一次观测点数据，更新slot0.sqrtPriceX96, slot0.tick等值。</p>
+<p>如果交换前后tick值相同，则只需要修改价格</p>
+<pre class=" language-solidity"><code class="language-solidity"> if (cache.liquidityStart != state.liquidity) liquidity = state.liquidity;
+</code></pre>
+<p>更新全局流动性</p>
+<pre class=" language-solidity"><code class="language-solidity">        if (zeroForOne) {
+            feeGrowthGlobal0X128 = state.feeGrowthGlobalX128;
+            if (state.protocolFee > 0) protocolFees.token0 += state.protocolFee;
+        } else {
+            feeGrowthGlobal1X128 = state.feeGrowthGlobalX128;
+            if (state.protocolFee > 0) protocolFees.token1 += state.protocolFee;
+        }
+</code></pre>
+<p>更新累积手续费和协议手续费。(注意，如果是从token0交换token1，则只能收取token0作为手续费；反之，只能收取token1作为手续费。)</p>
+<pre class=" language-solidity"><code class="language-solidity">    (amount0, amount1) = zeroForOne == exactInput
+        ? (amountSpecified - state.amountSpecifiedRemaining, state.amountCalculated)
+        : (state.amountCalculated, amountSpecified - state.amountSpecifiedRemaining);
+</code></pre>
+<p>确定最终用户支付的 token 数和得到的 token 数。</p>
+<pre class=" language-solidity"><code class="language-solidity">if (zeroForOne) {
+            if (amount1 < 0) TransferHelper.safeTransfer(token1, recipient, uint256(-amount1));
+
+            uint256 balance0Before = balance0();
+            IUniswapV3SwapCallback(msg.sender).uniswapV3SwapCallback(amount0, amount1, data);
+            require(balance0Before.add(uint256(amount0)) <= balance0(), 'IIA');
+        } else {
+            if (amount0 < 0) TransferHelper.safeTransfer(token0, recipient, uint256(-amount0));
+
+            uint256 balance1Before = balance1();
+            IUniswapV3SwapCallback(msg.sender).uniswapV3SwapCallback(amount0, amount1, data);
+            require(balance1Before.add(uint256(amount1)) <= balance1(), 'IIA');
+        }
+</code></pre>
+<p>最后转账。</p>
+<h3 id="flash"><a href="#flash" class="headerlink" title="flash"></a>flash</h3><p>与V2一样，V3版本中也又两种闪电贷，但是是通过不同的函数接口来完成的。</p>
+<p>第一种是普通的闪电贷，借入和还贷的token相同，通过UniswapV3Pool.flash()完成。<br>第二种是类似V2的flash swap，借入和还贷的token不同，这个是通过UniswapV3Pool.swap()来完成的。</p>
+<p>就不赘述了。</p>
+<h3 id="collect"><a href="#collect" class="headerlink" title="collect"></a>collect</h3><pre class=" language-solidity"><code class="language-solidity">    function collect(
+        address recipient,
+        int24 tickLower,
+        int24 tickUpper,
+        uint128 amount0Requested,
+        uint128 amount1Requested
+    ) external override lock returns (uint128 amount0, uint128 amount1) {
+        // we don't need to checkTicks here, because invalid positions will never have non-zero tokensOwed{0,1}
+        Position.Info storage position = positions.get(msg.sender, tickLower, tickUpper);
+
+        amount0 = amount0Requested > position.tokensOwed0 ? position.tokensOwed0 : amount0Requested;
+        amount1 = amount1Requested > position.tokensOwed1 ? position.tokensOwed1 : amount1Requested;
+
+        if (amount0 > 0) {
+            position.tokensOwed0 -= amount0;
+            TransferHelper.safeTransfer(token0, recipient, amount0);
+        }
+        if (amount1 > 0) {
+            position.tokensOwed1 -= amount1;
+            TransferHelper.safeTransfer(token1, recipient, amount1);
+        }
+
+        emit Collect(msg.sender, recipient, tickLower, tickUpper, amount0, amount1);
+    }
+</code></pre>
+<p>逻辑比较简单，首先获取用户的头寸，再计算提取的代币数量amount0与amount1，最后更新状态，转移代币。</p>
 
                 
             </div>
@@ -469,7 +840,7 @@
                     </i>
                 </span>
                 <span class="reprint-info">
-                    <a href="https://willcking.github.io/2024/01/17/ERC721A%E8%A7%A3%E6%9E%90/">https://willcking.github.io/2024/01/17/ERC721A%E8%A7%A3%E6%9E%90/</a>
+                    <a href="https://willcking.github.io/2024/03/28/Uniswap-V3%E5%88%86%E6%9E%90(%E4%BA%8C)/">https://willcking.github.io/2024/03/28/Uniswap-V3%E5%88%86%E6%9E%90(%E4%BA%8C)/</a>
                 </span>
             </div>
             <div class="reprint__notice">
@@ -587,13 +958,13 @@
             <div class="article-badge left-badge text-color">
                 <i class="fas fa-chevron-left"></i>&nbsp;上一篇</div>
             <div class="card">
-                <a href="/2024/03/08/compund%E5%88%86%E6%9E%90/">
+                <a href="/2024/03/29/Uniswap-v3%E5%88%86%E6%9E%90(%E4%B8%89)/">
                     <div class="card-image">
                         
                         
-                        <img src="/medias/featureimages/2.jpg" class="responsive-img" alt="compund分析">
+                        <img src="/medias/featureimages/12.jpg" class="responsive-img" alt="Uniswap v3分析(三)">
                         
-                        <span class="card-title">compund分析</span>
+                        <span class="card-title">Uniswap v3分析(三)</span>
                     </div>
                 </a>
                 <div class="card-content article-content">
@@ -604,7 +975,7 @@
                     </div>
                     <div class="publish-info">
                         <span class="publish-date">
-                            <i class="far fa-clock fa-fw icon-date"></i>2024-03-08
+                            <i class="far fa-clock fa-fw icon-date"></i>2024-03-29
                         </span>
                         <span class="publish-author">
                             
@@ -624,13 +995,13 @@
                 下一篇&nbsp;<i class="fas fa-chevron-right"></i>
             </div>
             <div class="card">
-                <a href="/2023/11/03/20230711-RodeoFinance/">
+                <a href="/2024/03/27/%E4%BB%BB%E6%84%8F%E5%9C%B0%E5%9D%80%E6%AC%BA%E9%AA%97%E6%94%BB%E5%87%BB%EF%BC%9AERC2771/">
                     <div class="card-image">
                         
                         
-                        <img src="/medias/featureimages/3.jpg" class="responsive-img" alt="20230711 RodeoFinance">
+                        <img src="/medias/featureimages/20.jpg" class="responsive-img" alt="任意地址欺骗攻击：ERC2771">
                         
-                        <span class="card-title">20230711 RodeoFinance</span>
+                        <span class="card-title">任意地址欺骗攻击：ERC2771</span>
                     </div>
                 </a>
                 <div class="card-content article-content">
@@ -641,7 +1012,7 @@
                     </div>
                     <div class="publish-info">
                             <span class="publish-date">
-                                <i class="far fa-clock fa-fw icon-date"></i>2023-11-03
+                                <i class="far fa-clock fa-fw icon-date"></i>2024-03-27
                             </span>
                         <span class="publish-author">
                             

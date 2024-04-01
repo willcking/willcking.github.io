@@ -68,9 +68,9 @@ UniswapV3Facto">
 
     <script src="/libs/jquery/jquery-3.6.0.min.js"></script>
 
-<meta name="generator" content="Hexo 6.3.0"><link rel="stylesheet" href="/css/prism-tomorrow.css" type="text/css">
+<meta name="generator" content="Hexo 6.3.0">
 <style>.github-emoji { position: relative; display: inline-block; width: 1.2em; min-height: 1.2em; overflow: hidden; vertical-align: top; color: transparent; }  .github-emoji > span { position: relative; z-index: 10; }  .github-emoji img, .github-emoji .fancybox { margin: 0 !important; padding: 0 !important; border: none !important; outline: none !important; text-decoration: none !important; user-select: none !important; cursor: auto !important; }  .github-emoji img { height: 1.2em !important; width: 1.2em !important; position: absolute !important; left: 50% !important; top: 50% !important; transform: translate(-50%, -50%) !important; user-select: none !important; cursor: auto !important; } .github-emoji-fallback { color: inherit; } .github-emoji-fallback img { opacity: 0 !important; }</style>
-</head>
+<link rel="stylesheet" href="/css/prism-tomorrow.css" type="text/css"></head>
 
 
 <body>
@@ -337,21 +337,21 @@ UniswapV3Facto">
                 
                 <div class="post-date info-break-policy">
                     <i class="far fa-calendar-check fa-fw"></i>更新日期:&nbsp;&nbsp;
-                    2024-03-28
+                    2024-03-31
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-file-word fa-fw"></i>文章字数:&nbsp;&nbsp;
-                    987
+                    1.6k
                 </div>
                 
 
                 
                 <div class="info-break-policy">
                     <i class="far fa-clock fa-fw"></i>阅读时长:&nbsp;&nbsp;
-                    3 分
+                    5 分
                 </div>
                 
 
@@ -390,10 +390,36 @@ UniswapV3Facto">
 <pre class=" language-solidity"><code class="language-solidity">(X_virtual+X_real) * (Y_virtual+Y_real) = k = L*L
 </code></pre>
 <p>这里的virtual变量只和L, a,b有关，和X_real，Y_real没有关系。X_real，Y_real为用户提供的Xtoken，Ytoken数量。注意，X_virtual和Y_virtual虚拟出的只是为了计算一致性，并不会参与真实交易，因此其数量是恒定不变的。当价格变动，移动到用户设定的价格区间之外时，流动池会移除这部分流动性。</p>
+<h3 id="Tick"><a href="#Tick" class="headerlink" title="Tick"></a>Tick</h3><p>UniswapV3将连续的价格范围，分割成有限个离散的价格点。每一个价格对应一个 tick，用户在设置流动性的价格区间时，只能选择这些离散的价格点中的某一个作为流动性的边界价格。</p>
+<p>tick有如下特征：</p>
+<pre><code>tick组成的价格序列既为一串等比数列，公比为 1.0001，即p_i = 1.0001^i
+
+为了计算方便，实际计算过程使用的是√P，即√p_i = (√1.0001)^i
+
+tick的序号是固定的整数集合，即 区间 [-887272, 887272] 的整数。
+</code></pre>
 <h3 id="V3的交易"><a href="#V3的交易" class="headerlink" title="V3的交易"></a>V3的交易</h3><p>因为每一个用户提供的流动性都可能设置不同的价格区间，这样一来一个交易对的池子中就包含了多个不同的流动性。因此从单个交易池的视角来看，Uniswap v3实际上扮演的角色是一个交易聚合器。当发生交易时，此交易会拆分成多个，通过池中多个不同的流动性来进行交易，最后将交易结果聚合，完成最终的交易过程。</p>
 <p>而交易的具体过程又类似于LOB，每对Tick都可以看做一个具有流动性L的池。这个池的功能就是流动性不变的情况下，完成x和y的兑换功能。所以tick i和tick i+1可以看做一组限价单。交易的过程不停进行x和y的买入卖出，直到这对tick的流动性L被耗尽。此时系统再转移到下一组tick 继续执行订单。</p>
 <h3 id="V3的手续费"><a href="#V3的手续费" class="headerlink" title="V3的手续费"></a>V3的手续费</h3><p>在v1和v2中，每个交易对对应一个独立的流动性池，对所有池收取0.30%的手续费。但对于部分池子可能太高了(稳定币池)，而对于另一部分池子又太低了(高波动性)。</p>
 <p>为了解决这个问题，v3为每个交易对引入了多种池，允许分别设置不同的交易手续费。默认允许创建三个手续费等级：0.05%，0.30%和1%。可以通过UNI治理添加更多手续费等级。</p>
+<h3 id="手续费"><a href="#手续费" class="headerlink" title="手续费"></a>手续费</h3><p>当价格来到一个tick，我们只要记录这个tick上的交易量，根据费率算出该区间的总手续费，然后找出所有包含该 tick 流动性头寸 position，先将他们的数量汇总，再根据出资比例逐个分配手续费，将数值累加到待每个头寸的待收取手续费的变量上。</p>
+<p>这是一个很常见的反法，但是十分消耗gas。因为一笔交易可能会横跨很多个tick，且单个tick 的计算，就有可能涉及到非常多的流动性头寸 position，这不但需要一个耗时的遍历查找的过程，更严重的问题是，每个流动性头寸的待收取手续费肯定是要写入一个storage变量。</p>
+<p>V3中为了解决这个问题使用了如下方法：</p>
+<p>先看要用到的变量：</p>
+<pre><code>feeGrowthGlobal：表示全局累计的手续费总额
+
+feeGrowthOutside：表示发生在此tick外侧的手续费总额
+
+feeGrowthInside：表示此position内的手续费总额(注：只会在position发生变动或者用户提取手续费时更新)
+</code></pre>
+<p>V3定义为与当前价格所对应的 tick 相对于 tick i 的相反侧。</p>
+<p>此时便可以计算出position内的手续费总额，注意根据 i_current, a, b 三者位置关系不同，需要判断above和below的计算方式，</p>
+<p>每当有流动性注入的时候，在价格的边界对应的 tick 上有如下初始化规则：</p>
+<pre><code>当 i_current &lt; i 则 feeGrowthOutside = feeGrowthGlobal
+当 i_current &gt;= i 则 feeGrowthOutside = 0
+</code></pre>
+<p>在交易过程中，feeGrowthOutside 有如下更新规则：</p>
+<p>当价格穿过某个已初始化的 tick 时，该 tick 上的 feeGrowthOutside 需要翻转，因为外侧手续费永远要在当前价格的另一侧，固 feeGrowthOutside = feeGrowthGlobal - feeGrowthOutside</p>
 
                 
             </div>
@@ -829,7 +855,7 @@ UniswapV3Facto">
             <br>
             
                 &nbsp;<i class="fas fa-chart-area"></i>&nbsp;站点总字数:&nbsp;<span
-                        class="white-color">30k</span>
+                        class="white-color">30.6k</span>
             
             
             

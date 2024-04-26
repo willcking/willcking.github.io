@@ -4,11 +4,50 @@
   
     
     <entry>
+      <title>EIP191、EIP712解析</title>
+      <link href="/2024/04/25/EIP191%E3%80%81EIP712%E8%A7%A3%E6%9E%90/"/>
+      <url>/2024/04/25/EIP191%E3%80%81EIP712%E8%A7%A3%E6%9E%90/</url>
+      
+        <content type="html"><![CDATA[<p>由于EIP712是EIP191的一种，相当于EIP-712继承了EIP-191，所以就不过多解析EIP-191了。</p><h2 id="EIP-191"><a href="#EIP-191" class="headerlink" title="EIP-191"></a>EIP-191</h2><p>简单来说<a href="https://eips.ethereum.org/EIPS/eip-191">EIP-191</a>是为了定义智能合约中签名数据的格式。</p><p>EIP191的数据格式为：</p><pre class=" language-solidity"><code class="language-solidity">0x19 <1 byte version> <version specific data> <data to sign>.</code></pre><p>这其中的&lt;1 byte version&gt;用来确定EIP191的版本。</p><p>目前一共有三个版本号：0x00，0x01，0x45。其中0x01即为EIP712。</p><p>version 0x00数据格式为：</p><pre class=" language-solidity"><code class="language-solidity">0x19 <0x00> <intended validator address> <data to sign></code></pre><p>version 0x45数据格式为：</p><pre class=" language-solidity"><code class="language-solidity">0x19 <0x45 (E)> <thereum Signed Message:\n" + len(message)> <data to sign></code></pre><p>之所以使用0x19作为前缀：</p><ol><li><p>是为了和RLP编码区分。</p></li><li><p>是为了兼容交易。因为一开始并没有EIP191格式，人们常用的是最初由Geth实现的 personal_sign方案，数据格式为：</p></li></ol><pre class=" language-solidity"><code class="language-solidity">"\x19Ethereum Signed Message:\n" + length(message) + message</code></pre><p>而人们往往会对message做哈希运算，因此更常见的格式为：</p><pre class=" language-solidity"><code class="language-solidity">"\x19Ethereum Signed Message:\n32" + Keccak256(message)</code></pre><p>为了兼容这类交易，就以0x19为前缀，再把第一个字母“E”作为版本号。</p><h2 id="EIP712"><a href="#EIP712" class="headerlink" title="EIP712"></a>EIP712</h2><p>EIP712是EIP191的改良版，用于改良EIP191中存在的问题。</p><p>EIP191有几个问题：</p><ol><li>没有明确防止重访攻击的规定。</li><li>没有编码规范，造成一些外部组件，比如钱包，无法解析编码，导致用户无法了解签名内容。</li></ol><p>EIP712就是为了解决以上两个问题：</p><ol><li>通过DOMAIN_SEPARATOR设定，防止重放攻击。</li><li>规范对结构体编码的方式，使签名内容可视化，高签名时的安全性。</li></ol><h3 id="防止重放攻击"><a href="#防止重放攻击" class="headerlink" title="防止重放攻击"></a>防止重放攻击</h3><p>EIP-712结构如下</p><pre class=" language-solidity"><code class="language-solidity">encode(domainSeparator,message)=x19x01/domainSeparator/hashStruct(message)</code></pre><p>其中的x19x01与hashStruct(message)就不解释了，我们主要看domainSeparator字段，这才是防止重入的关键。</p><p>domainSeparator字段结构如下：</p><pre class=" language-solidity"><code class="language-solidity">domainSeparator = keccak256(typeHash / encodeData(S))</code></pre><p>typeHash为一个结构体的编码再进行keccak256，结构体如下：</p><pre class=" language-solidity"><code class="language-solidity">struct EIP712Domain{    string name,     string version,     uint256 chainId,     address verifyingContract,     bytes32 salt }</code></pre><p>encodeData是上述结构体中的参数的编码。</p><p>需要注意的是，结构体中的字段可以省略，但不可以颠倒顺序。</p><h3 id="签名内容可视化"><a href="#签名内容可视化" class="headerlink" title="签名内容可视化"></a>签名内容可视化</h3><p>EIP712通过规范对结构体编码的方式来使签名内容可视化。其主要体现在hashStruct(message)字段中。<br>hashStruct(message)字段结构如下：</p><pre><code>hashStruct(message) = keccak256(typeHash / encodeData(S))</code></pre><p>与domainSeparator字段类似，因此就不再赘述了。</p><p>可以看到messageHash中，把结构体名称，属性名称都编码进去了，因此钱包等第三方能够知道编码的结构体数据结构。</p>]]></content>
+      
+      
+      
+    </entry>
+    
+    
+    
+    <entry>
+      <title>以太坊签名解析</title>
+      <link href="/2024/04/25/%E4%BB%A5%E5%A4%AA%E5%9D%8A%E7%AD%BE%E5%90%8D%E8%A7%A3%E6%9E%90/"/>
+      <url>/2024/04/25/%E4%BB%A5%E5%A4%AA%E5%9D%8A%E7%AD%BE%E5%90%8D%E8%A7%A3%E6%9E%90/</url>
+      
+        <content type="html"><![CDATA[<h1 id="以太坊签名解析"><a href="#以太坊签名解析" class="headerlink" title="以太坊签名解析"></a>以太坊签名解析</h1><h2 id="签名交易"><a href="#签名交易" class="headerlink" title="签名交易"></a>签名交易</h2><p>一个签名交易由(nonce, gasPrice, gasLimit, to, value, data, v, r, s)构成。其中的参数作用如下：</p><pre><code>nonce: 记录发起交易的账户已执行交易总数。gasPrice:该交易每单位gas的价格。gasLimit:该交易支付的最高gas上限。to：该交易被送往的地址(如果是部署合约交易，to为空，节点看到to是空的就知道这是部署合约交易)。value：交易发送的以太币总量。data:若该交易是以太币交易，则data为空；若是部署合约，则data为合约的bytecode；若是合约调用，则data为selector+函数参数；chainId：防止跨链重放攻击。</code></pre><p>在签名时会先对RLP(nonce, gasPrice, gasLimit, to, value, data, chainId, 0, 0)进行Keccak256，然后对其进行签名得到(v,r,s)，最后会对(nonce, gasPrice, gasLimit, to, value, data, v, r, s)再次进行RPL编码，与keccak256，签名。</p><h2 id="签名消息"><a href="#签名消息" class="headerlink" title="签名消息"></a>签名消息</h2><p>签名消息即预签名(presigned message)。在了解什么是签名消息之前我们先要知道发给节点的只能是交易签名+相应参数，即上文中的(v, r, s)与(nonce, gasPrice, gasLimit, to, value, data)。通过观察其中的参数能发现在与合约进行交互时主要通过data来实现，而消息签名就是用来实现对合约的调用，即消息签名是data的一部分。</p><p>以ERC20-Permit举个例子</p><pre><code>    function permit(        address owner,        address spender,        uint256 value,        uint256 deadline,        uint8 v,        bytes32 r,        bytes32 s    ) public virtual {        if (block.timestamp &gt; deadline) {            revert ERC2612ExpiredSignature(deadline);        }        bytes32 structHash = keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, _useNonce(owner), deadline));        bytes32 hash = _hashTypedDataV4(structHash);        address signer = ECDSA.recover(hash, v, r, s);        if (signer != owner) {            revert ERC2612InvalidSigner(signer, owner);        }        _approve(owner, spender, value);    }</code></pre><p>当用户调用permit函数时会对“调用permit函数”行为这个进行签名，即签名交易，然后节点将会进行验证。而消息签名则是用户在调用permit函数时输入的参数中的(v,r,s)。</p><h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>交易签名是由调用者进行签名，由节点进行验证。而消息签名由他人进行签名，是交易签名中的data的一部分，由合约进行验证，允许调用者以消息签名的签名者的身份对合约进行操作。</p>]]></content>
+      
+      
+      
+    </entry>
+    
+    
+    
+    <entry>
+      <title>Layer2: Rollups</title>
+      <link href="/2024/04/19/Layer2-Rollups/"/>
+      <url>/2024/04/19/Layer2-Rollups/</url>
+      
+        <content type="html"><![CDATA[]]></content>
+      
+      
+      
+    </entry>
+    
+    
+    
+    <entry>
       <title>Synthetix分析</title>
       <link href="/2024/04/01/Synthetix%E5%88%86%E6%9E%90/"/>
       <url>/2024/04/01/Synthetix%E5%88%86%E6%9E%90/</url>
       
-        <content type="html"><![CDATA[]]></content>
+        <content type="html"><![CDATA[<h1 id="Synthetix分析"><a href="#Synthetix分析" class="headerlink" title="Synthetix分析"></a>Synthetix分析</h1><p>本文只是对Synthetix原理的简单分析，并不会对具体的代码实现进行深入的探讨。</p><h2 id="基本原理"><a href="#基本原理" class="headerlink" title="基本原理"></a>基本原理</h2><p>用户可以通过超额抵押自己的原生代币SNX得到sUSD(1sUSD = 1美元)，在哪之后用户就可以使用sUSD取购买Synths(比如sBTC，sETH)。<br>如果用作抵押品来生成合成资产的SNX的价值下降，质押者就必须补充更多的SNX才能赎回原来抵押的SNX。</p><p>(质押比为300%)<br>举个例子：<br>1.当前SNX价值1美元，ETH价值100美元，Bob拥有300SNX，Bob质押了所有的SNX得到了100sUSD。</p><p>2.此时SNX的价格下降到0.9美元，此时Bob必须补充30SNX才能赎回质押的SNX。</p><h2 id="质押收益"><a href="#质押收益" class="headerlink" title="质押收益"></a>质押收益</h2><p>1.基于通胀的奖励：</p><p>SNX有一个内置的通胀系统，从2019年3月到2023年8月，SNX的总供应量将从100,000,000增加到260,263,816。在2023年9月后，通胀为每年 2.5％。这些新增的 SNX 会按比例每周分配给 SNX 抵押率不低于目标阈值的抵押者。</p><p>2.交易的手续费：</p><p>每次有人交易这些基于SNX抵押发行的合成资产时，必须要支付一定的手续费(费率在0.3%至1%之间)，手续费会被存到费用池中。抵押者每周可以按比例瓜分用池中的SNX。</p><h2 id="用户间的博弈"><a href="#用户间的博弈" class="headerlink" title="用户间的博弈"></a>用户间的博弈</h2><p>Synthetix采用了 “全网负债表” 的方式。即当总债务发生变化时，质押者的债务将按比例发生变化。官方用了两个例子来形象的说明 “全网负债表” 这个模式。</p><p>第一个例子：</p><p>Bob和Alice一开始都质押了价值5万美元的sUSD。此时全网负债额为10万美元，Bob和Alice各负担 50% 。</p><p>Bob用价值5万美元的sUSD购买了sBTC，Alice则继续持有sUSD。</p><p>当BTC的价格上涨了50%，Bob持有的资产价值为7.5万美元。此时全网的负债增加到了 12.5 万美元。</p><p>因为Bob和Alice各占全网负债的50%，也就是说两人各自负债6.25万美元。Bob所持有的sBTC不仅可以偿还他的负债，还能带来1.25万美元的收益。虽然Alice所持有的sUSD依然价值5万美元，但是她的负债相应增加了1.25万美元。</p><p>第二个例子：</p><p>Bob和Alice一开始都质押了价值5万美元的sUSD。此时全网负债额为10万美元，Bob和Alice各负担50%。</p><p>Bob用价值5万美元的sUSD购买了sBTC，Alice则购买了价值5万美元的iBTC来做空BTC。</p><p>当BTC的价格上涨了50%，Bob持有的资产价值7.5万美元，而Alice的iBTC跌至2.5万美元。此时全网的总负债额为10万美元。</p><p>因为Bob和Alice各占全网负债的50%，也就是说两人各自负债5万美元。Bob所持有的sBTC不仅可以偿还他的负债，还能带来2.5万美元的收益。Alice则要承担2.5万美元的损失。</p><p>这样看，Synthetix不只是激励人们质押，同时还要积极开启交易头寸。正所谓，这世上没有免费的午餐。</p><h2 id="清算"><a href="#清算" class="headerlink" title="清算"></a>清算</h2><p>当质押者的抵押比率低于清算比率时，他们将受到清算，这是一种对于维持协议稳定性至关重要的风险管理机制。Synthetix提供了2中清算方法。</p><p>强制平仓：</p><p>如果质押者在被标记后不采取任何行动，协议将强制清算。这种惩罚通常在 60% 左右，在协议内重新分配，以激励积极参与并惩罚疏忽。</p><p>自清算：</p><p>主动管理其股份的质押者可能会选择自我清算，从而产生较小的罚款，通常为被清算的 SNX 部分的 50% 左右。</p><p>这种方法为那些寻求退出头寸或故意减少风险敞口的人提供了较少的惩罚措施。</p>]]></content>
       
       
       
